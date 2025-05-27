@@ -1,4 +1,3 @@
-
 interface SlideElement {
   type: 'text' | 'image' | 'shape' | 'chart' | 'table';
   position: { x: number; y: number; width: number; height: number };
@@ -29,6 +28,8 @@ interface SlideAnalysis {
     colorScheme: string[];
     fontHierarchy: string[];
   };
+  activityType?: string;
+  contentType?: string;
 }
 
 interface LessonStructure {
@@ -51,35 +52,41 @@ interface LessonStructure {
   };
 }
 
-// Real PowerPoint parsing implementation
+// Enhanced PowerPoint parsing implementation
 export const analyzePowerPointFile = async (file: File): Promise<LessonStructure> => {
   try {
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
     
-    // Read the .pptx file as a zip archive
     const zipContent = await zip.loadAsync(file);
     
-    // Extract presentation.xml for slide structure
-    const presentationXml = await zipContent.file('ppt/presentation.xml')?.async('text');
+    // Get slides folder and count actual slides
     const slidesFolder = zipContent.folder('ppt/slides');
-    
-    if (!presentationXml || !slidesFolder) {
-      throw new Error('Invalid PowerPoint file structure');
+    if (!slidesFolder) {
+      throw new Error('No slides found in PowerPoint file');
     }
+    
+    // Count actual slide files (.xml files, excluding rels and other metadata)
+    const slideFiles = Object.keys(slidesFolder.files)
+      .filter(name => name.match(/^slide\d+\.xml$/))
+      .sort((a, b) => {
+        const numA = parseInt(a.match(/\d+/)?.[0] || '0');
+        const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+        return numA - numB;
+      });
+    
+    console.log(`Found ${slideFiles.length} slides in ${file.name}:`, slideFiles);
     
     const slides: SlideAnalysis[] = [];
     const designElements = {
       colors: new Set<string>(),
       fonts: new Set<string>(),
       layouts: new Map<string, number>(),
-      logoPositions: [] as string[],
-      imageStyles: [] as string[],
+      activityTypes: new Set<string>(),
+      contentTypes: new Set<string>(),
     };
     
     // Parse each slide
-    const slideFiles = Object.keys(slidesFolder.files).filter(name => name.endsWith('.xml'));
-    
     for (let i = 0; i < slideFiles.length; i++) {
       const slideXml = await slidesFolder.file(slideFiles[i])?.async('text');
       if (!slideXml) continue;
@@ -91,11 +98,18 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
       slideAnalysis.designPatterns.colorScheme.forEach(color => designElements.colors.add(color));
       slideAnalysis.designPatterns.fontHierarchy.forEach(font => designElements.fonts.add(font));
       
+      if (slideAnalysis.activityType) {
+        designElements.activityTypes.add(slideAnalysis.activityType);
+      }
+      if (slideAnalysis.contentType) {
+        designElements.contentTypes.add(slideAnalysis.contentType);
+      }
+      
       const layoutCount = designElements.layouts.get(slideAnalysis.layout) || 0;
       designElements.layouts.set(slideAnalysis.layout, layoutCount + 1);
     }
     
-    // Extract theme colors from theme files
+    // Extract theme colors
     const themeFolder = zipContent.folder('ppt/theme');
     if (themeFolder) {
       const themeFiles = Object.keys(themeFolder.files).filter(name => name.endsWith('.xml'));
@@ -107,21 +121,24 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
       }
     }
     
-    // Analyze pedagogical patterns from slide flow
+    // Analyze pedagogical patterns from slide sequence
     const pedagogicalAnalysis = analyzePedagogicalPatterns(slides);
     
     return {
-      totalSlides: slides.length,
+      totalSlides: slides.length, // Use actual counted slides
       lessonFlow: extractLessonFlow(slides),
       commonLayouts: Object.fromEntries(designElements.layouts),
       designSystem: {
-        primaryColors: Array.from(designElements.colors).slice(0, 5),
-        secondaryColors: Array.from(designElements.colors).slice(5, 10),
-        fontFamilies: Array.from(designElements.fonts),
+        primaryColors: Array.from(designElements.colors).slice(0, 3),
+        secondaryColors: Array.from(designElements.colors).slice(3, 6),
+        fontFamilies: Array.from(designElements.fonts).slice(0, 3),
         logoPositions: extractLogoPositions(slides),
         imageStyles: extractImageStyles(slides)
       },
-      pedagogicalPatterns: pedagogicalAnalysis
+      pedagogicalPatterns: {
+        ...pedagogicalAnalysis,
+        activityTypes: Array.from(designElements.activityTypes)
+      }
     };
     
   } catch (error) {
@@ -138,12 +155,15 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   const colorScheme: string[] = [];
   const fontHierarchy: string[] = [];
   
-  // Extract text elements
+  // Extract all text content for analysis
+  let allText = '';
   const textElements = doc.querySelectorAll('a\\:t, t');
   textElements.forEach((textEl, index) => {
     const text = textEl.textContent || '';
     if (text.trim()) {
-      // Find parent elements for formatting
+      allText += text.toLowerCase() + ' ';
+      
+      // Find formatting information
       const runProps = textEl.closest('a\\:r')?.querySelector('a\\:rPr');
       const fontSize = runProps?.getAttribute('sz') ? parseInt(runProps.getAttribute('sz')!) / 100 : 12;
       const fontFamily = runProps?.querySelector('a\\:latin')?.getAttribute('typeface') || 'Arial';
@@ -175,7 +195,7 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
     }
   });
   
-  // Extract image elements
+  // Extract images
   const images = doc.querySelectorAll('pic\\:pic, p\\:pic');
   images.forEach((img, index) => {
     const blip = img.querySelector('a\\:blip');
@@ -194,7 +214,9 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
     }
   });
   
-  // Determine layout type based on content
+  // Determine activity type from content
+  const activityType = determineActivityType(allText);
+  const contentType = determineContentType(allText);
   const layoutType = determineLayoutType(elements);
   
   return {
@@ -208,8 +230,78 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
       imageAlignment: determineImageAlignment(elements),
       colorScheme: [...new Set(colorScheme)],
       fontHierarchy: [...new Set(fontHierarchy)]
-    }
+    },
+    activityType,
+    contentType
   };
+};
+
+const determineActivityType = (text: string): string => {
+  const lowerText = text.toLowerCase();
+  
+  if (lowerText.includes('discuss') || lowerText.includes('talk about') || lowerText.includes('share')) {
+    return 'Discussion Activity';
+  }
+  if (lowerText.includes('pair') || lowerText.includes('partner')) {
+    return 'Pair Work';
+  }
+  if (lowerText.includes('group') || lowerText.includes('team')) {
+    return 'Group Activity';
+  }
+  if (lowerText.includes('role play') || lowerText.includes('act out')) {
+    return 'Role Playing';
+  }
+  if (lowerText.includes('match') || lowerText.includes('connect') || lowerText.includes('link')) {
+    return 'Matching Exercise';
+  }
+  if (lowerText.includes('complete') || lowerText.includes('fill in') || lowerText.includes('blank')) {
+    return 'Gap Fill Activity';
+  }
+  if (lowerText.includes('listen') || lowerText.includes('audio') || lowerText.includes('hear')) {
+    return 'Listening Activity';
+  }
+  if (lowerText.includes('read') || lowerText.includes('passage') || lowerText.includes('text')) {
+    return 'Reading Activity';
+  }
+  if (lowerText.includes('write') || lowerText.includes('composition')) {
+    return 'Writing Activity';
+  }
+  if (lowerText.includes('vocabulary') || lowerText.includes('words') || lowerText.includes('meaning')) {
+    return 'Vocabulary Building';
+  }
+  if (lowerText.includes('question') || lowerText.includes('answer') || lowerText.includes('quiz')) {
+    return 'Q&A Session';
+  }
+  
+  return 'Content Presentation';
+};
+
+const determineContentType = (text: string): string => {
+  const lowerText = text.toLowerCase();
+  
+  if (lowerText.includes('objective') || lowerText.includes('goal') || lowerText.includes('aim')) {
+    return 'Learning Objectives';
+  }
+  if (lowerText.includes('introduction') || lowerText.includes('welcome') || lowerText.includes('today')) {
+    return 'Introduction';
+  }
+  if (lowerText.includes('vocabulary') || lowerText.includes('new words')) {
+    return 'Vocabulary Introduction';
+  }
+  if (lowerText.includes('grammar') || lowerText.includes('structure')) {
+    return 'Grammar Point';
+  }
+  if (lowerText.includes('practice') || lowerText.includes('exercise')) {
+    return 'Practice Activity';
+  }
+  if (lowerText.includes('homework') || lowerText.includes('assignment') || lowerText.includes('next time')) {
+    return 'Homework/Conclusion';
+  }
+  if (lowerText.includes('review') || lowerText.includes('summary')) {
+    return 'Review/Summary';
+  }
+  
+  return 'Main Content';
 };
 
 const extractThemeColors = (themeXml: string, colorSet: Set<string>) => {
@@ -230,22 +322,21 @@ const determineLayoutType = (elements: SlideElement[]): string => {
   const imageElements = elements.filter(e => e.type === 'image');
   
   if (textElements.length === 1 && imageElements.length === 0) {
-    return 'Title Only';
+    return 'Title Slide';
   }
   if (textElements.length > 1 && imageElements.length === 0) {
-    return 'Title and Content';
+    return 'Text Heavy';
   }
   if (imageElements.length > 0 && textElements.length > 0) {
-    return 'Picture with Caption';
+    return 'Mixed Content';
   }
-  if (textElements.length > 2 || imageElements.length > 1) {
-    return 'Two Content';
+  if (imageElements.length > 1) {
+    return 'Visual Focused';
   }
-  return 'Custom Layout';
+  return 'Standard Layout';
 };
 
 const extractBackgroundColor = (doc: Document): string => {
-  // Try to find background color in slide properties
   const bgFill = doc.querySelector('p\\:bg, a\\:bgFillStyleLst');
   if (bgFill) {
     const solidFill = bgFill.querySelector('a\\:solidFill a\\:srgbClr');
@@ -269,8 +360,8 @@ const determineTitlePosition = (elements: SlideElement[]): string => {
 const determineContentLayout = (elements: SlideElement[]): string => {
   const contentElements = elements.filter(e => e.type !== 'text' || elements.indexOf(e) > 0);
   if (contentElements.length === 0) return 'text-only';
-  if (contentElements.length === 1) return 'single-column';
-  return 'multi-column';
+  if (contentElements.length === 1) return 'single-focus';
+  return 'multi-element';
 };
 
 const determineImageAlignment = (elements: SlideElement[]): string => {
@@ -278,44 +369,13 @@ const determineImageAlignment = (elements: SlideElement[]): string => {
   if (imageElements.length === 0) return 'none';
   
   const avgX = imageElements.reduce((sum, img) => sum + img.position.x, 0) / imageElements.length;
-  if (avgX < 200) return 'left';
-  if (avgX > 600) return 'right';
-  return 'center';
+  if (avgX < 200) return 'left-aligned';
+  if (avgX > 600) return 'right-aligned';
+  return 'center-aligned';
 };
 
 const extractLessonFlow = (slides: SlideAnalysis[]): string[] => {
-  const flow: string[] = [];
-  
-  slides.forEach((slide, index) => {
-    const textContent = slide.elements
-      .filter(e => e.type === 'text')
-      .map(e => e.content.toLowerCase())
-      .join(' ');
-    
-    if (index === 0) {
-      flow.push('Title Slide');
-    } else if (textContent.includes('objective') || textContent.includes('goal')) {
-      flow.push('Learning Objectives');
-    } else if (textContent.includes('vocabulary') || textContent.includes('words')) {
-      flow.push('Vocabulary Introduction');
-    } else if (textContent.includes('reading') || textContent.includes('passage')) {
-      flow.push('Reading Passage');
-    } else if (textContent.includes('question') || textContent.includes('comprehension')) {
-      flow.push('Comprehension Questions');
-    } else if (textContent.includes('discussion') || textContent.includes('talk')) {
-      flow.push('Group Discussion');
-    } else if (textContent.includes('activity') || textContent.includes('practice')) {
-      flow.push('Practice Activities');
-    } else if (textContent.includes('assessment') || textContent.includes('quiz')) {
-      flow.push('Assessment');
-    } else if (textContent.includes('homework') || textContent.includes('conclusion')) {
-      flow.push('Conclusion & Homework');
-    } else {
-      flow.push('Content Slide');
-    }
-  });
-  
-  return flow;
+  return slides.map(slide => slide.contentType || slide.activityType || 'Content Slide');
 };
 
 const extractLogoPositions = (slides: SlideAnalysis[]): string[] => {
@@ -327,10 +387,8 @@ const extractLogoPositions = (slides: SlideAnalysis[]): string[] => {
         const { x, y } = element.position;
         if (x < 100 && y < 100) positions.push('top-left');
         else if (x > 600 && y < 100) positions.push('top-right');
-        else if (x < 100 && y > 400) positions.push('bottom-left');
-        else if (x > 600 && y > 400) positions.push('bottom-right');
-        else if (y < 100) positions.push('top-center');
-        else if (y > 400) positions.push('bottom-center');
+        else if (y < 100) positions.push('header-area');
+        else if (y > 400) positions.push('footer-area');
       }
     });
   });
@@ -340,51 +398,54 @@ const extractLogoPositions = (slides: SlideAnalysis[]): string[] => {
 
 const extractImageStyles = (slides: SlideAnalysis[]): string[] => {
   const styles: string[] = [];
+  const hasImages = slides.some(slide => 
+    slide.elements.some(el => el.type === 'image')
+  );
   
-  slides.forEach(slide => {
-    slide.elements.forEach(element => {
-      if (element.type === 'image') {
-        // Analyze image styling patterns
-        styles.push('rounded-corners', 'drop-shadow', 'bordered');
-      }
-    });
-  });
+  if (hasImages) {
+    styles.push('contextual-images', 'professional-layout');
+  }
   
-  return [...new Set(styles)];
+  return styles;
 };
 
 const analyzePedagogicalPatterns = (slides: SlideAnalysis[]) => {
+  const activityTypes = slides
+    .map(slide => slide.activityType)
+    .filter(Boolean) as string[];
+    
+  const contentTypes = slides
+    .map(slide => slide.contentType)
+    .filter(Boolean) as string[];
+  
+  const contentProgression = slides.map((slide, index) => {
+    if (index === 0) return 'Introduction';
+    if (index === slides.length - 1) return 'Conclusion';
+    return slide.contentType || slide.activityType || 'Content Development';
+  });
+  
+  // Determine assessment methods from content
+  const assessmentMethods = [];
   const allText = slides.flatMap(slide => 
     slide.elements.filter(e => e.type === 'text').map(e => e.content.toLowerCase())
   ).join(' ');
   
-  const activityTypes = [];
-  if (allText.includes('pair') || allText.includes('partner')) activityTypes.push('Pair Work');
-  if (allText.includes('group') || allText.includes('team')) activityTypes.push('Group Discussions');
-  if (allText.includes('individual') || allText.includes('alone')) activityTypes.push('Individual Reflection');
-  if (allText.includes('role') || allText.includes('act')) activityTypes.push('Role Playing');
-  if (allText.includes('match') || allText.includes('connect')) activityTypes.push('Matching Exercises');
-  if (allText.includes('fill') || allText.includes('complete')) activityTypes.push('Gap Fill Activities');
-  
-  const assessmentMethods = [];
-  if (allText.includes('question') || allText.includes('q&a')) assessmentMethods.push('Formative Q&A');
-  if (allText.includes('exit') || allText.includes('ticket')) assessmentMethods.push('Exit Tickets');
-  if (allText.includes('peer') || allText.includes('partner assess')) assessmentMethods.push('Peer Assessment');
-  if (allText.includes('reflect') || allText.includes('self')) assessmentMethods.push('Self-Reflection');
+  if (allText.includes('question') || allText.includes('quiz')) {
+    assessmentMethods.push('Q&A Assessment');
+  }
+  if (allText.includes('discuss') || allText.includes('share')) {
+    assessmentMethods.push('Discussion-based Assessment');
+  }
+  if (allText.includes('practice') || allText.includes('exercise')) {
+    assessmentMethods.push('Practice-based Assessment');
+  }
   
   return {
-    introductionStyle: allText.includes('question') ? 'Question-based engagement with visual hook' : 'Direct introduction',
-    contentProgression: [
-      'Context Setting',
-      'Vocabulary Pre-teaching',
-      'Main Content Delivery',
-      'Guided Practice',
-      'Independent Application',
-      'Assessment & Reflection'
-    ],
-    activityTypes: activityTypes.length > 0 ? activityTypes : ['Interactive Learning'],
-    assessmentMethods: assessmentMethods.length > 0 ? assessmentMethods : ['Formative Assessment'],
-    conclusionStyle: allText.includes('next') || allText.includes('preview') ? 'Summary with preview of next lesson' : 'Standard conclusion'
+    introductionStyle: contentTypes[0] || 'Direct Introduction',
+    contentProgression: [...new Set(contentProgression)],
+    activityTypes: [...new Set(activityTypes)],
+    assessmentMethods: assessmentMethods.length > 0 ? assessmentMethods : ['Observational Assessment'],
+    conclusionStyle: contentTypes[contentTypes.length - 1] || 'Standard Conclusion'
   };
 };
 
@@ -392,30 +453,31 @@ export const aggregateAnalysis = (analyses: LessonStructure[]): any => {
   const totalSlides = analyses.reduce((sum, analysis) => sum + analysis.totalSlides, 0);
   const totalLessons = analyses.length;
   
-  // Aggregate design patterns with real frequency analysis
-  const allColors = analyses.flatMap(a => [...a.designSystem.primaryColors, ...a.designSystem.secondaryColors]);
-  const colorFrequency = allColors.reduce((acc, color) => {
-    acc[color] = (acc[color] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  console.log('Aggregating analysis:', {
+    totalLessons,
+    totalSlides,
+    analyses: analyses.map(a => ({ totalSlides: a.totalSlides }))
+  });
   
+  // Aggregate all activity types
+  const allActivityTypes = analyses.flatMap(a => a.pedagogicalPatterns.activityTypes);
+  const uniqueActivityTypes = [...new Set(allActivityTypes)];
+  
+  // Aggregate colors with better filtering
+  const allColors = analyses.flatMap(a => [...a.designSystem.primaryColors, ...a.designSystem.secondaryColors])
+    .filter(color => color && color !== '#000000' && color !== '#FFFFFF');
+  const uniqueColors = [...new Set(allColors)];
+  
+  // Aggregate fonts
   const allFonts = analyses.flatMap(a => a.designSystem.fontFamilies);
-  const fontFrequency = allFonts.reduce((acc, font) => {
-    acc[font] = (acc[font] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const uniqueFonts = [...new Set(allFonts)].filter(font => font && font !== 'Arial');
   
+  // Aggregate layouts
   const allLayouts = analyses.flatMap(a => Object.entries(a.commonLayouts));
   const layoutFrequency = allLayouts.reduce((acc, [layout, count]) => {
     acc[layout] = (acc[layout] || 0) + count;
     return acc;
   }, {} as Record<string, number>);
-  
-  // Calculate confidence based on data consistency
-  const designConsistency = Math.min(95, 60 + (totalLessons * 5));
-  const styleRecognition = Math.min(98, 70 + (totalSlides * 0.5));
-  const pedagogicalAlignment = Math.min(99, 80 + (totalLessons * 3));
-  const overallAccuracy = Math.round((designConsistency + styleRecognition + pedagogicalAlignment) / 3);
 
   return {
     overview: {
@@ -425,43 +487,32 @@ export const aggregateAnalysis = (analyses: LessonStructure[]): any => {
       analysisDate: new Date().toISOString().split('T')[0]
     },
     designSystem: {
-      dominantColors: Object.entries(colorFrequency)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 5)
-        .map(([color]) => color),
-      preferredFonts: Object.entries(fontFrequency)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 3)
-        .map(([font]) => font),
+      dominantColors: uniqueColors.slice(0, 4),
+      preferredFonts: uniqueFonts.slice(0, 3),
       commonLayouts: Object.entries(layoutFrequency)
         .sort(([,a], [,b]) => b - a)
         .slice(0, 4)
         .map(([layout, count]) => ({ layout, usage: Math.round((count / totalSlides) * 100) }))
     },
     pedagogicalInsights: {
-      teachingStyle: analyses.length > 0 ? 'Interactive and student-centered' : 'Analysis pending',
-      preferredActivityTypes: [...new Set(analyses.flatMap(a => a.pedagogicalPatterns.activityTypes))],
+      teachingStyle: 'Interactive and systematic approach with varied activities',
+      preferredActivityTypes: uniqueActivityTypes,
       lessonStructurePattern: [
-        'Engagement Hook (5%)',
-        'Objective Setting (5%)',
-        'Content Delivery (40%)',
-        'Guided Practice (25%)',
-        'Independent Application (20%)',
-        'Assessment & Closure (5%)'
+        'Lesson Introduction',
+        'Content Presentation', 
+        'Interactive Activities',
+        'Practice & Application',
+        'Assessment & Review',
+        'Conclusion & Wrap-up'
       ],
-      assessmentApproach: 'Continuous formative assessment with peer interaction'
+      assessmentApproach: 'Multi-modal assessment through activities and discussion'
     },
     visualPatterns: {
-      imageUsage: analyses.some(a => a.designSystem.imageStyles.length > 0) ? 'High visual support with contextual images' : 'Text-focused approach',
-      logoPlacement: analyses.flatMap(a => a.designSystem.logoPositions)[0] || 'Consistent branding in header/footer areas',
-      textFormatting: 'Clear hierarchy with readable fonts',
-      spacingPattern: 'Generous white space for clarity'
-    },
-    confidence: {
-      designConsistency,
-      pedagogicalAlignment,
-      styleRecognition,
-      overallAccuracy
+      imageUsage: analyses.some(a => a.designSystem.imageStyles.length > 0) ? 
+        'Strategic use of visuals to support content' : 'Text-focused with minimal visuals',
+      logoPlacement: 'Consistent branding placement',
+      textFormatting: 'Clear hierarchy with readable typography',
+      spacingPattern: 'Organized layout with logical flow'
     }
   };
 };
