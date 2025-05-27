@@ -384,6 +384,8 @@ const extractLogoPositions = (slides: SlideAnalysis[]): string[] => {
 };
 
 const extractImageStyles = (slides: SlideAnalysis[]): string[] => {
+  const styles: string[] = [];
+  
   const hasImages = slides.some(slide => 
     slide.elements.some(el => el.type === 'image')
   );
