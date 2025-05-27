@@ -209,7 +209,7 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
     
   } catch (error) {
     console.error('Error analyzing PowerPoint file:', error);
-    throw new Error(`Failed to analyze PowerPoint file: ${error.message}`);
+    throw new Error(`Failed to analyze PowerPoint file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 
@@ -224,37 +224,36 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   let slideTitle = '';
   
   console.log(`=== ANALYZING SLIDE ${slideNumber} ===`);
-  console.log('Raw XML preview:', slideXml.substring(0, 500));
   
-  // Updated approach based on your specific PowerPoint file structure
+  // Extract slide title using the improved method
   function extractSlideTitle(slideXml: Document): string {
-    // Strategy 1: Find title by placeholder type (most reliable)
+    // Try to find title by placeholder type first (most reliable)
     const allShapes = slideXml.querySelectorAll('p\\:sp, sp');
     let titleElement = null;
     
     console.log(`Found ${allShapes.length} shapes in slide ${slideNumber}`);
     
-    // Look for shape that contains a placeholder with type="title"
+    // Find the shape that contains a placeholder with type="title"
     for (const shape of allShapes) {
-      const placeholder = shape.querySelector('p\\:nvPr p\\:ph[type="title"], nvPr ph[type="title"]');
-      if (placeholder) {
+      if (shape.querySelector('p\\:nvPr p\\:ph[type="title"], nvPr ph[type="title"]')) {
         console.log(`Found title placeholder in slide ${slideNumber}`);
         titleElement = shape;
         break;
       }
     }
     
-    // Strategy 2: Find by name attribute containing "Title"
+    // If not found, try to find by name attribute containing "Title"
     if (!titleElement) {
       console.log(`No title placeholder found, trying name attribute for slide ${slideNumber}`);
-      for (const shape of allShapes) {
+      const titleByName = Array.from(allShapes).filter(shape => {
         const nameElement = shape.querySelector('p\\:cNvPr, cNvPr');
         const nameAttr = nameElement?.getAttribute('name');
-        if (nameAttr && nameAttr.includes('Title')) {
-          console.log(`Found title by name "${nameAttr}" in slide ${slideNumber}`);
-          titleElement = shape;
-          break;
-        }
+        return nameAttr && nameAttr.includes('Title');
+      });
+      
+      if (titleByName.length > 0) {
+        console.log(`Found title by name in slide ${slideNumber}`);
+        titleElement = titleByName[0];
       }
     }
     
@@ -262,35 +261,50 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
     if (titleElement) {
       console.log(`Extracting text from title element in slide ${slideNumber}`);
       const textElements = titleElement.querySelectorAll('p\\:txBody a\\:p a\\:r a\\:t, txBody p r t, p\\:txBody a\\:t, txBody t');
-      const titleTexts = Array.from(textElements).map(el => el.textContent?.trim()).filter(Boolean);
+      const titleTexts = Array.from(textElements)
+        .map(el => el.textContent?.trim())
+        .filter(Boolean);
       
       if (titleTexts.length > 0) {
-        const fullTitle = titleTexts.join(' ').trim();
+        const fullTitle = titleTexts.join('').trim();
         console.log(`Successfully extracted title: "${fullTitle}" from slide ${slideNumber}`);
         return fullTitle;
       }
     }
     
-    console.log(`No title found for slide ${slideNumber}, using fallback`);
-    return '';
-  }
-  
-  // Use the new extraction function
-  slideTitle = extractSlideTitle(doc);
-  
-  // Fallback: get first significant text if still no title
-  if (!slideTitle) {
-    console.log(`Using fallback text extraction for slide ${slideNumber}`);
+    console.log(`No title found for slide ${slideNumber}, trying largest text fallback`);
+    
+    // Fallback: find the largest text element
     const allTextElements = doc.querySelectorAll('a\\:t, t');
+    let largestText = '';
+    let largestFontSize = 0;
+    
     for (const textEl of allTextElements) {
       const text = textEl.textContent?.trim();
       if (text && text.length > 2 && text.length < 100) {
-        slideTitle = text;
-        console.log(`Found title via fallback: "${slideTitle}" for slide ${slideNumber}`);
-        break;
+        // Try to find font size
+        const runParent = textEl.closest('a\\:r, r');
+        const rPr = runParent?.querySelector('a\\:rPr, rPr');
+        const sizeAttr = rPr?.getAttribute('sz');
+        const fontSize = sizeAttr ? parseInt(sizeAttr) / 100 : 12;
+        
+        if (fontSize > largestFontSize) {
+          largestFontSize = fontSize;
+          largestText = text;
+        }
       }
     }
+    
+    if (largestText) {
+      console.log(`Found title via largest text fallback: "${largestText}" (${largestFontSize}pt) for slide ${slideNumber}`);
+      return largestText;
+    }
+    
+    return '';
   }
+  
+  // Use the extraction function
+  slideTitle = extractSlideTitle(doc);
   
   // Collect all text for content analysis
   let allText = '';
@@ -326,13 +340,11 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   console.log(`Slide ${slideNumber} - Final extracted title: "${slideTitle}"`);
   console.log(`Slide ${slideNumber} - All text length: ${allText.length}`);
   
-  // Import and use the simple activity type detection
-  const { extractActivityTypesFromSlide } = await import('./activityTypeDetection');
-  const activityTypes = extractActivityTypesFromSlide(slideTitle, allText);
-  const primaryActivityType = activityTypes.length > 0 ? activityTypes.join(', ') : 'Content Slide';
+  // Import and use the enhanced activity type detection
+  const { categorizeActivityType } = await import('./activityTypeDetection');
+  const activityType = categorizeActivityType(slideTitle, allText);
   
-  console.log(`Slide ${slideNumber} - Found activity types: [${activityTypes.join(', ')}]`);
-  console.log(`Slide ${slideNumber} - Primary activity type: "${primaryActivityType}"`);
+  console.log(`Slide ${slideNumber} - Categorized activity type: "${activityType}"`);
   
   const contentType = determineContentType(allText);
   const layoutType = determineLayoutType(elements);
@@ -349,7 +361,7 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
       colorScheme: [...new Set(colorScheme)],
       fontHierarchy: [...new Set(fontHierarchy)]
     },
-    activityType: primaryActivityType,
+    activityType,
     contentType
   };
 };
