@@ -225,39 +225,76 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   let allText = '';
   let slideTitle = '';
   
-  // More comprehensive title extraction - look for actual title placeholders first
-  const titlePlaceholders = doc.querySelectorAll('p\\:ph[type="title"], p\\:ph[type="ctrTitle"]');
+  console.log(`=== ANALYZING SLIDE ${slideNumber} ===`);
   
-  // If we find title placeholders, get their text content
-  if (titlePlaceholders.length > 0) {
-    for (const placeholder of titlePlaceholders) {
-      // Look for text within this placeholder's parent elements
-      const parentShape = placeholder.closest('p\\:sp');
-      if (parentShape) {
-        const textElements = parentShape.querySelectorAll('a\\:t');
-        const titleTexts = Array.from(textElements).map(el => el.textContent?.trim()).filter(Boolean);
-        if (titleTexts.length > 0) {
-          slideTitle = titleTexts.join(' ').trim();
+  // Enhanced title extraction with multiple strategies
+  // Strategy 1: Look for title placeholders with different namespace variations
+  const titleSelectors = [
+    'p\\:ph[type="title"]',
+    'p\\:ph[type="ctrTitle"]', 
+    'p\\:ph[type="subTitle"]',
+    'ph[type="title"]',
+    'ph[type="ctrTitle"]',
+    '*[type="title"]'
+  ];
+  
+  for (const selector of titleSelectors) {
+    const titlePlaceholders = doc.querySelectorAll(selector);
+    if (titlePlaceholders.length > 0) {
+      for (const placeholder of titlePlaceholders) {
+        const parentShape = placeholder.closest('p\\:sp') || placeholder.closest('sp');
+        if (parentShape) {
+          const textElements = parentShape.querySelectorAll('a\\:t, t');
+          const titleTexts = Array.from(textElements)
+            .map(el => el.textContent?.trim())
+            .filter(Boolean);
+          if (titleTexts.length > 0) {
+            slideTitle = titleTexts.join(' ').trim();
+            console.log(`Found title via ${selector}: "${slideTitle}"`);
+            break;
+          }
+        }
+      }
+      if (slideTitle) break;
+    }
+  }
+  
+  // Strategy 2: If no title found in placeholders, look for first significant text
+  if (!slideTitle) {
+    const allTextElements = doc.querySelectorAll('a\\:t, t');
+    const textContents = Array.from(allTextElements)
+      .map(el => el.textContent?.trim())
+      .filter(text => text && text.length > 2 && text.length < 200);
+    
+    if (textContents.length > 0) {
+      slideTitle = textContents[0];
+      console.log(`Found title via first text: "${slideTitle}"`);
+    }
+  }
+  
+  // Strategy 3: Look for text in shape elements with specific positioning (likely titles)
+  if (!slideTitle) {
+    const shapes = doc.querySelectorAll('p\\:sp, sp');
+    for (const shape of shapes) {
+      const textBody = shape.querySelector('p\\:txBody, txBody');
+      if (textBody) {
+        const textElements = textBody.querySelectorAll('a\\:t, t');
+        const shapeText = Array.from(textElements)
+          .map(el => el.textContent?.trim())
+          .filter(Boolean)
+          .join(' ');
+        
+        if (shapeText && shapeText.length > 2 && shapeText.length < 200) {
+          slideTitle = shapeText;
+          console.log(`Found title via shape text: "${slideTitle}"`);
           break;
         }
       }
     }
   }
   
-  // If no title found in placeholders, look for the first text element that might be a title
-  if (!slideTitle) {
-    const allTextElements = doc.querySelectorAll('a\\:t');
-    if (allTextElements.length > 0) {
-      const firstTextContent = allTextElements[0].textContent?.trim();
-      // Only use as title if it's not too long and looks like a title
-      if (firstTextContent && firstTextContent.length > 1 && firstTextContent.length < 150) {
-        slideTitle = firstTextContent;
-      }
-    }
-  }
-  
   // Collect all text for content analysis
-  const textElements = doc.querySelectorAll('a\\:t, p\\:txBody, a\\:p');
+  const textElements = doc.querySelectorAll('a\\:t, p\\:txBody, a\\:p, t, txBody, p');
   textElements.forEach((element, index) => {
     const textContent = element.textContent?.trim();
     if (textContent && textContent.length > 1) {
@@ -283,12 +320,24 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
     }
   });
   
-  // Use the actual slide title as the activity type, cleaned up
-  const activityType = slideTitle ? cleanAndFormatTitle(slideTitle) : 'Content Slide';
+  console.log(`Slide ${slideNumber} - Extracted title: "${slideTitle}"`);
+  console.log(`Slide ${slideNumber} - All text length: ${allText.length}`);
+  
+  // Determine activity type from the extracted title
+  let activityType = 'Content Slide';
+  if (slideTitle && slideTitle.length > 0) {
+    activityType = determineActivityTypeFromTitle(slideTitle);
+    console.log(`Slide ${slideNumber} - Activity type from title: "${activityType}"`);
+  } else {
+    // Fallback to content analysis if no title found
+    activityType = determineActivityType(allText);
+    console.log(`Slide ${slideNumber} - Activity type from content: "${activityType}"`);
+  }
+  
   const contentType = determineContentType(allText);
   const layoutType = determineLayoutType(elements);
   
-  console.log(`Slide ${slideNumber} - Raw Title: "${slideTitle}" -> Activity Type: "${activityType}"`);
+  console.log(`Slide ${slideNumber} FINAL - Title: "${slideTitle}" -> Activity: "${activityType}"`);
   
   return {
     slideNumber,
@@ -423,11 +472,13 @@ const determineActivityTypeFromTitle = (title: string): string => {
   }
   
   // If title doesn't match specific patterns, use the title itself as activity type if it's descriptive
-  if (lowerTitle.length > 3 && lowerTitle.length < 50) {
+  if (title.length > 3 && title.length < 50) {
     // Capitalize first letter of each word for better presentation
-    return title.split(' ')
+    const cleanTitle = title.split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
+    console.log(`Using cleaned title as activity type: "${cleanTitle}"`);
+    return cleanTitle;
   }
   
   return 'Content Presentation';
@@ -529,8 +580,7 @@ const determineActivityType = (text: string): string => {
   }
   
   if (lowerText.includes('review') || lowerText.includes('summary') || 
-      lowerText.includes('recap') || lowerText.includes('what we learned') ||
-      lowerText.includes('remember') || lowerText.includes('recall')) {
+      lowerText.includes('recap') || lowerText.includes('what we learned')) {
     return 'Review Activity';
   }
   
@@ -732,7 +782,7 @@ const extractImageStyles = (slides: SlideAnalysis[]): string[] => {
 };
 
 const analyzePedagogicalPatterns = (slides: SlideAnalysis[]) => {
-  // Get all activity types directly from slide titles - don't filter anything out
+  // Get all activity types directly from slides
   const activityTypes = slides
     .map(slide => slide.activityType)
     .filter(Boolean) as string[];
@@ -757,6 +807,7 @@ const analyzePedagogicalPatterns = (slides: SlideAnalysis[]) => {
   // Get ALL unique activity types - don't filter any out
   const uniqueActivityTypes = [...new Set(activityTypes)];
   
+  console.log('=== PEDAGOGICAL ANALYSIS ===');
   console.log('All activity types found:', activityTypes);
   console.log('Unique activity types:', uniqueActivityTypes);
   console.log('Total unique activity types:', uniqueActivityTypes.length);
@@ -774,24 +825,17 @@ export const aggregateAnalysis = (analyses: LessonStructure[]): any => {
   const totalSlides = analyses.reduce((sum, analysis) => sum + analysis.totalSlides, 0);
   const totalLessons = analyses.length;
   
-  console.log('Aggregating analysis - ACCURATE COUNT:', {
-    totalLessons,
-    totalSlides,
-    breakdownPerFile: analyses.map((a, i) => ({ 
-      file: i + 1, 
-      slides: a.totalSlides 
-    }))
-  });
+  console.log('=== AGGREGATING ANALYSIS ===');
+  console.log('Total lessons:', totalLessons);
+  console.log('Total slides:', totalSlides);
   
   // Aggregate ALL activity types found across all files - don't filter anything
   const allActivityTypes = analyses.flatMap(a => a.pedagogicalPatterns.activityTypes);
   const uniqueActivityTypes = [...new Set(allActivityTypes)];
   
-  console.log('Aggregating activity types:', {
-    allActivityTypes,
-    uniqueActivityTypes,
-    totalUniqueTypes: uniqueActivityTypes.length
-  });
+  console.log('All activity types across files:', allActivityTypes);
+  console.log('Unique activity types:', uniqueActivityTypes);
+  console.log('Total unique activity types:', uniqueActivityTypes.length);
   
   // Get actual lesson flow patterns
   const allFlowPatterns = analyses.flatMap(a => a.pedagogicalPatterns.contentProgression);
