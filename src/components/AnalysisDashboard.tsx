@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Brain, 
-  Palette, 
   Layout, 
   FileText, 
   Target, 
@@ -14,7 +13,8 @@ import {
   Trash2,
   Download,
   Plus,
-  RefreshCw
+  RefreshCw,
+  ArrowRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -24,6 +24,7 @@ interface AnalysisDashboardProps {
   onFileRemove: (fileId: string) => void;
   onReanalyze: () => void;
   onAddMoreFiles: () => void;
+  analysisName?: string;
 }
 
 const AnalysisDashboard = ({ 
@@ -31,7 +32,8 @@ const AnalysisDashboard = ({
   uploadedFiles, 
   onFileRemove, 
   onReanalyze,
-  onAddMoreFiles 
+  onAddMoreFiles,
+  analysisName 
 }: AnalysisDashboardProps) => {
   const [savedAnalyses, setSavedAnalyses] = useState<any[]>([]);
   const { toast } = useToast();
@@ -50,12 +52,13 @@ const AnalysisDashboard = ({
   };
 
   const saveAnalysis = async () => {
-    const analysisName = prompt("Enter a name for this analysis:");
-    if (!analysisName) return;
+    const defaultName = `Analysis_${new Date().toLocaleDateString()}`;
+    const userAnalysisName = prompt("Enter a name for this analysis:", defaultName);
+    if (!userAnalysisName) return;
 
     const analysisToSave = {
       id: Date.now().toString(),
-      name: analysisName,
+      name: userAnalysisName,
       data: analysisResults,
       files: uploadedFiles.map(f => ({ name: f.name, size: f.size })),
       createdAt: new Date().toISOString(),
@@ -70,7 +73,7 @@ const AnalysisDashboard = ({
       
       toast({
         title: "Analysis Saved",
-        description: `"${analysisName}" has been saved successfully.`,
+        description: `"${userAnalysisName}" has been saved successfully.`,
       });
     } catch (error) {
       toast({
@@ -92,13 +95,25 @@ const AnalysisDashboard = ({
     URL.revokeObjectURL(url);
   };
 
-  // Use accurate data from analysis results
+  // Get accurate data from analysis results
   const totalSlides = analysisResults?.overview?.totalSlides || 0;
   const totalLessons = analysisResults?.overview?.totalLessons || uploadedFiles.length;
-  const activityCount = analysisResults?.pedagogicalInsights?.preferredActivityTypes?.length || 0;
+  const activityTypes = analysisResults?.pedagogicalInsights?.preferredActivityTypes || [];
 
   return (
     <div className="space-y-6">
+      {/* Analysis Name Header */}
+      {analysisName && (
+        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-blue-600" />
+              <h3 className="text-lg font-semibold text-blue-900">Current Analysis: {analysisName}</h3>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Analysis Overview */}
       <Card>
         <CardHeader>
@@ -111,7 +126,7 @@ const AnalysisDashboard = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
               <div className="text-2xl font-bold text-blue-600">{totalLessons}</div>
               <div className="text-sm text-blue-700">PowerPoint Files</div>
@@ -120,14 +135,8 @@ const AnalysisDashboard = ({
               <div className="text-2xl font-bold text-green-600">{totalSlides}</div>
               <div className="text-sm text-green-700">Total Slides Analyzed</div>
             </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">
-                {analysisResults?.designSystem?.dominantColors?.length || 0}
-              </div>
-              <div className="text-sm text-purple-700">Design Colors</div>
-            </div>
             <div className="text-center p-4 bg-orange-50 rounded-lg">
-              <div className="text-2xl font-bold text-orange-600">{activityCount}</div>
+              <div className="text-2xl font-bold text-orange-600">{activityTypes.length}</div>
               <div className="text-sm text-orange-700">Activity Types Found</div>
             </div>
           </div>
@@ -158,7 +167,7 @@ const AnalysisDashboard = ({
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="teaching-style">Teaching Methodology</TabsTrigger>
           <TabsTrigger value="design-patterns">Visual Design</TabsTrigger>
-          <TabsTrigger value="content-structure">Content Flow</TabsTrigger>
+          <TabsTrigger value="content-flow">Activity Flow</TabsTrigger>
           <TabsTrigger value="file-management">File Management</TabsTrigger>
         </TabsList>
 
@@ -178,13 +187,16 @@ const AnalysisDashboard = ({
                   {analysisResults?.pedagogicalInsights?.teachingStyle || 'Interactive and student-centered approach'}
                 </p>
                 
-                <h4 className="font-medium mb-2">Activity Types Found in Your Slides ({activityCount})</h4>
+                <h4 className="font-medium mb-2">Activity Types Found ({activityTypes.length})</h4>
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {(analysisResults?.pedagogicalInsights?.preferredActivityTypes || []).map((activity: string, index: number) => (
+                  {activityTypes.map((activity: string, index: number) => (
                     <Badge key={index} variant="secondary" className="bg-purple-100 text-purple-800">
                       {activity}
                     </Badge>
                   ))}
+                  {activityTypes.length === 0 && (
+                    <p className="text-sm text-gray-500">No specific activity types detected in slides</p>
+                  )}
                 </div>
 
                 <h4 className="font-medium mb-2">Lesson Structure Pattern</h4>
@@ -212,44 +224,24 @@ const AnalysisDashboard = ({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Palette className="h-5 w-5 text-blue-600" />
+                <Layout className="h-5 w-5 text-blue-600" />
                 Visual Design System
               </CardTitle>
-              <CardDescription>Colors, fonts, and layout patterns extracted from your presentations</CardDescription>
+              <CardDescription>Layout patterns and typography extracted from your presentations</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <h4 className="font-medium mb-3">Color Palette ({analysisResults?.designSystem?.dominantColors?.length || 0} colors)</h4>
-                <div className="flex flex-wrap gap-3 mb-6">
-                  {(analysisResults?.designSystem?.dominantColors || []).map((color: string, index: number) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <div
-                        className="w-10 h-10 rounded-lg border-2 border-gray-200 shadow-sm"
-                        style={{ backgroundColor: color }}
-                        title={color}
-                      />
-                      <span className="text-xs text-gray-600 font-mono">{color}</span>
-                    </div>
-                  ))}
-                  {(!analysisResults?.designSystem?.dominantColors || analysisResults.designSystem.dominantColors.length === 0) && (
-                    <p className="text-sm text-gray-500">No specific color patterns detected in slides</p>
-                  )}
-                </div>
-                
-                <h4 className="font-medium mb-3">Typography</h4>
+                <h4 className="font-medium mb-3">Typography & Fonts</h4>
                 <div className="flex flex-wrap gap-2 mb-6">
                   {(analysisResults?.designSystem?.preferredFonts || []).map((font: string, index: number) => (
                     <Badge key={index} variant="outline" style={{ fontFamily: font }} className="text-sm">
                       {font}
                     </Badge>
                   ))}
-                  {(!analysisResults?.designSystem?.preferredFonts || analysisResults.designSystem.preferredFonts.length === 0) && (
-                    <p className="text-sm text-gray-500">Standard system fonts detected</p>
-                  )}
                 </div>
                 
                 <h4 className="font-medium mb-3">Layout Patterns</h4>
-                <div className="space-y-2">
+                <div className="space-y-2 mb-6">
                   {(analysisResults?.designSystem?.commonLayouts || []).map((layout: any, index: number) => (
                     <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                       <span className="text-sm font-medium">{layout.layout}</span>
@@ -260,45 +252,63 @@ const AnalysisDashboard = ({
                     <p className="text-sm text-gray-500">Mixed layout patterns detected</p>
                   )}
                 </div>
+
+                <h4 className="font-medium mb-3">Visual Style</h4>
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-700">
+                    {analysisResults?.visualPatterns?.imageUsage || 'Professional presentation style with clear typography'}
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="content-structure" className="space-y-4">
+        <TabsContent value="content-flow" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Layout className="h-5 w-5 text-green-600" />
-                Content Organization & Flow
+                <ArrowRight className="h-5 w-5 text-green-600" />
+                Activity Flow & Progression
               </CardTitle>
-              <CardDescription>How your lessons are structured and content is organized</CardDescription>
+              <CardDescription>How activities and content progress through your lessons</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <h4 className="font-medium mb-3">Lesson Flow Pattern</h4>
+                <h4 className="font-medium mb-3">Lesson Activity Sequence</h4>
                 <div className="space-y-2 mb-6">
-                  {(analysisResults?.pedagogicalInsights?.lessonStructurePattern || []).map((step: string, index: number) => (
+                  {(analysisResults?.pedagogicalInsights?.lessonStructurePattern || []).map((step: string, index: number, array: string[]) => (
                     <div key={index} className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-200">
                       <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
                         {index + 1}
                       </div>
-                      <span className="text-sm font-medium">{step}</span>
+                      <span className="text-sm font-medium flex-1">{step}</span>
+                      {index < array.length - 1 && (
+                        <ArrowRight className="h-4 w-4 text-green-600" />
+                      )}
                     </div>
                   ))}
                 </div>
                 
-                <h4 className="font-medium mb-3">Visual Content Strategy</h4>
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-700">
-                    {analysisResults?.visualPatterns?.imageUsage || 'Balanced use of visual elements to support learning objectives'}
-                  </p>
+                <h4 className="font-medium mb-3">Activity Types in Sequence</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                  {activityTypes.map((activity: string, index: number) => (
+                    <div key={index} className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border">
+                      <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs">
+                        {index + 1}
+                      </div>
+                      <span className="text-sm font-medium">{activity}</span>
+                    </div>
+                  ))}
+                  {activityTypes.length === 0 && (
+                    <p className="text-sm text-gray-500 col-span-2">No specific activity sequence patterns detected</p>
+                  )}
                 </div>
                 
-                <h4 className="font-medium mb-3 mt-4">Content Organization Style</h4>
+                <h4 className="font-medium mb-3">Content Organization Strategy</h4>
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-700">
-                    {analysisResults?.visualPatterns?.spacingPattern || 'Organized layout with logical progression'}
+                    {analysisResults?.visualPatterns?.spacingPattern || 'Structured progression with logical flow between activities'}
                   </p>
                 </div>
               </div>

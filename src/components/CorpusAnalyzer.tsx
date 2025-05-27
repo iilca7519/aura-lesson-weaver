@@ -26,6 +26,7 @@ const CorpusAnalyzer = () => {
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
+  const [analysisName, setAnalysisName] = useState<string>('');
   const [activeTab, setActiveTab] = useState("upload");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -63,6 +64,15 @@ const CorpusAnalyzer = () => {
 
   const removeFile = (fileId: string) => {
     setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+    
+    // If we're removing files and there are no more files, reset analysis state
+    if (uploadedFiles.length === 1) {
+      setAnalysisComplete(false);
+      setAnalysisResults(null);
+      setAnalysisName('');
+      setActiveTab("upload");
+    }
+    
     toast({
       title: "File Removed",
       description: "File has been removed from analysis queue.",
@@ -78,6 +88,10 @@ const CorpusAnalyzer = () => {
       });
       return;
     }
+
+    // Generate analysis name
+    const defaultName = `Analysis_${new Date().toLocaleDateString().replace(/\//g, '-')}_${uploadedFiles.length}files`;
+    setAnalysisName(defaultName);
 
     setIsAnalyzing(true);
     setAnalysisProgress(0);
@@ -111,7 +125,7 @@ const CorpusAnalyzer = () => {
             description: analysisSteps[step],
           });
           
-          await new Promise(resolve => setTimeout(resolve, 600));
+          await new Promise(resolve => setTimeout(resolve, 400));
         }
         
         try {
@@ -146,7 +160,7 @@ const CorpusAnalyzer = () => {
       
       toast({
         title: "Deep Analysis Complete!",
-        description: `Successfully analyzed ${fileAnalyses.length} PowerPoint files. Ready for lesson generation.`,
+        description: `Successfully analyzed ${fileAnalyses.length} PowerPoint files with ${aggregatedResults.overview.totalSlides} total slides.`,
       });
     } catch (error) {
       console.error('Analysis error:', error);
@@ -161,8 +175,17 @@ const CorpusAnalyzer = () => {
 
   const handleLoadSavedAnalysis = (savedAnalysis: any) => {
     setAnalysisResults(savedAnalysis.data);
+    setAnalysisName(savedAnalysis.name);
     setAnalysisComplete(true);
     setActiveTab("dashboard");
+    
+    // Clear uploaded files since we're loading a saved analysis
+    setUploadedFiles([]);
+    
+    toast({
+      title: "Analysis Loaded",
+      description: `"${savedAnalysis.name}" has been loaded successfully.`,
+    });
   };
 
   const formatFileSize = (bytes: number) => {
@@ -289,6 +312,7 @@ const CorpusAnalyzer = () => {
               onFileRemove={removeFile}
               onReanalyze={startAnalysis}
               onAddMoreFiles={() => fileInputRef.current?.click()}
+              analysisName={analysisName}
             />
           )}
         </TabsContent>

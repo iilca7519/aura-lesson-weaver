@@ -66,16 +66,22 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
       throw new Error('No slides found in PowerPoint file');
     }
     
-    // Count actual slide files (.xml files, excluding rels and other metadata)
-    const slideFiles = Object.keys(slidesFolder.files)
-      .filter(name => name.match(/^slide\d+\.xml$/))
-      .sort((a, b) => {
-        const numA = parseInt(a.match(/\d+/)?.[0] || '0');
-        const numB = parseInt(b.match(/\d+/)?.[0] || '0');
-        return numA - numB;
-      });
+    // More accurate slide detection - look for slide XML files
+    const slideFiles = [];
+    for (const filename in slidesFolder.files) {
+      if (filename.match(/^slide\d+\.xml$/) && !slidesFolder.files[filename].dir) {
+        slideFiles.push(filename);
+      }
+    }
     
-    console.log(`Found ${slideFiles.length} slides in ${file.name}:`, slideFiles);
+    // Sort slides numerically
+    slideFiles.sort((a, b) => {
+      const numA = parseInt(a.match(/\d+/)?.[0] || '0');
+      const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+      return numA - numB;
+    });
+    
+    console.log(`Analyzing ${file.name}: Found ${slideFiles.length} actual slides:`, slideFiles);
     
     const slides: SlideAnalysis[] = [];
     const designElements = {
@@ -86,30 +92,34 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
       contentTypes: new Set<string>(),
     };
     
-    // Parse each slide
+    // Parse each slide for real content
     for (let i = 0; i < slideFiles.length; i++) {
-      const slideXml = await slidesFolder.file(slideFiles[i])?.async('text');
-      if (!slideXml) continue;
-      
-      const slideAnalysis = await analyzeSlideContent(slideXml, i + 1);
-      slides.push(slideAnalysis);
-      
-      // Aggregate design elements
-      slideAnalysis.designPatterns.colorScheme.forEach(color => designElements.colors.add(color));
-      slideAnalysis.designPatterns.fontHierarchy.forEach(font => designElements.fonts.add(font));
-      
-      if (slideAnalysis.activityType) {
-        designElements.activityTypes.add(slideAnalysis.activityType);
+      try {
+        const slideXml = await slidesFolder.file(slideFiles[i])?.async('text');
+        if (!slideXml) continue;
+        
+        const slideAnalysis = await analyzeSlideContent(slideXml, i + 1);
+        slides.push(slideAnalysis);
+        
+        // Aggregate design elements
+        slideAnalysis.designPatterns.colorScheme.forEach(color => designElements.colors.add(color));
+        slideAnalysis.designPatterns.fontHierarchy.forEach(font => designElements.fonts.add(font));
+        
+        if (slideAnalysis.activityType) {
+          designElements.activityTypes.add(slideAnalysis.activityType);
+        }
+        if (slideAnalysis.contentType) {
+          designElements.contentTypes.add(slideAnalysis.contentType);
+        }
+        
+        const layoutCount = designElements.layouts.get(slideAnalysis.layout) || 0;
+        designElements.layouts.set(slideAnalysis.layout, layoutCount + 1);
+      } catch (error) {
+        console.error(`Error parsing slide ${i + 1}:`, error);
       }
-      if (slideAnalysis.contentType) {
-        designElements.contentTypes.add(slideAnalysis.contentType);
-      }
-      
-      const layoutCount = designElements.layouts.get(slideAnalysis.layout) || 0;
-      designElements.layouts.set(slideAnalysis.layout, layoutCount + 1);
     }
     
-    // Extract theme colors
+    // Extract theme colors from theme files
     const themeFolder = zipContent.folder('ppt/theme');
     if (themeFolder) {
       const themeFiles = Object.keys(themeFolder.files).filter(name => name.endsWith('.xml'));
@@ -125,7 +135,7 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
     const pedagogicalAnalysis = analyzePedagogicalPatterns(slides);
     
     return {
-      totalSlides: slides.length, // Use actual counted slides
+      totalSlides: slides.length, // Actual counted slides
       lessonFlow: extractLessonFlow(slides),
       commonLayouts: Object.fromEntries(designElements.layouts),
       designSystem: {
@@ -143,7 +153,7 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
     
   } catch (error) {
     console.error('Error analyzing PowerPoint file:', error);
-    throw new Error('Failed to analyze PowerPoint file: ' + error.message);
+    throw new Error(`Failed to analyze PowerPoint file: ${error.message}`);
   }
 };
 
@@ -155,66 +165,36 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   const colorScheme: string[] = [];
   const fontHierarchy: string[] = [];
   
-  // Extract all text content for analysis
+  // Extract all text content for comprehensive analysis
   let allText = '';
-  const textElements = doc.querySelectorAll('a\\:t, t');
-  textElements.forEach((textEl, index) => {
-    const text = textEl.textContent || '';
-    if (text.trim()) {
-      allText += text.toLowerCase() + ' ';
+  const textElements = doc.querySelectorAll('*');
+  
+  textElements.forEach((element) => {
+    const textContent = element.textContent?.trim();
+    if (textContent && textContent.length > 2) {
+      allText += textContent.toLowerCase() + ' ';
       
-      // Find formatting information
-      const runProps = textEl.closest('a\\:r')?.querySelector('a\\:rPr');
-      const fontSize = runProps?.getAttribute('sz') ? parseInt(runProps.getAttribute('sz')!) / 100 : 12;
-      const fontFamily = runProps?.querySelector('a\\:latin')?.getAttribute('typeface') || 'Arial';
-      
-      // Extract color information
-      const solidFill = runProps?.querySelector('a\\:solidFill');
-      let color = '#000000';
-      if (solidFill) {
-        const srgbClr = solidFill.querySelector('a\\:srgbClr');
-        if (srgbClr) {
-          color = '#' + srgbClr.getAttribute('val');
-          colorScheme.push(color);
-        }
-      }
+      // Extract formatting if available
+      const fontSize = element.getAttribute('sz') ? parseInt(element.getAttribute('sz')!) / 100 : 12;
+      const fontFamily = element.getAttribute('typeface') || 'Arial';
       
       fontHierarchy.push(fontFamily);
       
       elements.push({
         type: 'text',
-        position: { x: 0, y: index * 20, width: 200, height: 20 },
-        content: text,
+        position: { x: 0, y: elements.length * 20, width: 200, height: 20 },
+        content: textContent,
         formatting: {
           fontSize,
           fontFamily,
-          color,
+          color: '#000000',
           alignment: 'left'
         }
       });
     }
   });
   
-  // Extract images
-  const images = doc.querySelectorAll('pic\\:pic, p\\:pic');
-  images.forEach((img, index) => {
-    const blip = img.querySelector('a\\:blip');
-    if (blip) {
-      elements.push({
-        type: 'image',
-        position: { x: 100, y: 100 + index * 150, width: 200, height: 150 },
-        content: 'Image',
-        formatting: {},
-        imageData: {
-          src: 'data:image/png;base64,placeholder',
-          alt: 'Slide image',
-          aspectRatio: 4/3
-        }
-      });
-    }
-  });
-  
-  // Determine activity type from content
+  // More sophisticated activity type detection
   const activityType = determineActivityType(allText);
   const contentType = determineContentType(allText);
   const layoutType = determineLayoutType(elements);
@@ -239,38 +219,45 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
 const determineActivityType = (text: string): string => {
   const lowerText = text.toLowerCase();
   
-  if (lowerText.includes('discuss') || lowerText.includes('talk about') || lowerText.includes('share')) {
+  // More specific activity detection
+  if (lowerText.includes('discuss') || lowerText.includes('discussion') || lowerText.includes('talk about') || lowerText.includes('share your thoughts')) {
     return 'Discussion Activity';
   }
-  if (lowerText.includes('pair') || lowerText.includes('partner')) {
+  if (lowerText.includes('pair work') || lowerText.includes('work with partner') || lowerText.includes('partner activity')) {
     return 'Pair Work';
   }
-  if (lowerText.includes('group') || lowerText.includes('team')) {
+  if (lowerText.includes('group work') || lowerText.includes('in groups') || lowerText.includes('team activity')) {
     return 'Group Activity';
   }
-  if (lowerText.includes('role play') || lowerText.includes('act out')) {
+  if (lowerText.includes('role play') || lowerText.includes('roleplay') || lowerText.includes('act out') || lowerText.includes('pretend you are')) {
     return 'Role Playing';
   }
-  if (lowerText.includes('match') || lowerText.includes('connect') || lowerText.includes('link')) {
+  if (lowerText.includes('match') || lowerText.includes('matching') || lowerText.includes('connect the') || lowerText.includes('link the')) {
     return 'Matching Exercise';
   }
-  if (lowerText.includes('complete') || lowerText.includes('fill in') || lowerText.includes('blank')) {
+  if (lowerText.includes('fill in') || lowerText.includes('complete the') || lowerText.includes('fill the blank') || lowerText.includes('gap fill')) {
     return 'Gap Fill Activity';
   }
-  if (lowerText.includes('listen') || lowerText.includes('audio') || lowerText.includes('hear')) {
+  if (lowerText.includes('listen') || lowerText.includes('listening') || lowerText.includes('audio') || lowerText.includes('hear the')) {
     return 'Listening Activity';
   }
-  if (lowerText.includes('read') || lowerText.includes('passage') || lowerText.includes('text')) {
+  if (lowerText.includes('read') || lowerText.includes('reading') || lowerText.includes('passage') || lowerText.includes('text analysis')) {
     return 'Reading Activity';
   }
-  if (lowerText.includes('write') || lowerText.includes('composition')) {
+  if (lowerText.includes('write') || lowerText.includes('writing') || lowerText.includes('composition') || lowerText.includes('essay')) {
     return 'Writing Activity';
   }
-  if (lowerText.includes('vocabulary') || lowerText.includes('words') || lowerText.includes('meaning')) {
+  if (lowerText.includes('vocabulary') || lowerText.includes('new words') || lowerText.includes('definitions') || lowerText.includes('word study')) {
     return 'Vocabulary Building';
   }
-  if (lowerText.includes('question') || lowerText.includes('answer') || lowerText.includes('quiz')) {
+  if (lowerText.includes('question') || lowerText.includes('answer') || lowerText.includes('quiz') || lowerText.includes('q&a')) {
     return 'Q&A Session';
+  }
+  if (lowerText.includes('practice') || lowerText.includes('exercise') || lowerText.includes('drill') || lowerText.includes('activity')) {
+    return 'Practice Exercise';
+  }
+  if (lowerText.includes('present') || lowerText.includes('presentation') || lowerText.includes('show') || lowerText.includes('demonstrate')) {
+    return 'Presentation Activity';
   }
   
   return 'Content Presentation';
@@ -279,25 +266,25 @@ const determineActivityType = (text: string): string => {
 const determineContentType = (text: string): string => {
   const lowerText = text.toLowerCase();
   
-  if (lowerText.includes('objective') || lowerText.includes('goal') || lowerText.includes('aim')) {
+  if (lowerText.includes('objective') || lowerText.includes('goal') || lowerText.includes('aim') || lowerText.includes('by the end')) {
     return 'Learning Objectives';
   }
-  if (lowerText.includes('introduction') || lowerText.includes('welcome') || lowerText.includes('today')) {
+  if (lowerText.includes('introduction') || lowerText.includes('welcome') || lowerText.includes('today we will') || lowerText.includes('warm up')) {
     return 'Introduction';
   }
-  if (lowerText.includes('vocabulary') || lowerText.includes('new words')) {
+  if (lowerText.includes('vocabulary') || lowerText.includes('new words') || lowerText.includes('key terms')) {
     return 'Vocabulary Introduction';
   }
-  if (lowerText.includes('grammar') || lowerText.includes('structure')) {
+  if (lowerText.includes('grammar') || lowerText.includes('structure') || lowerText.includes('language point')) {
     return 'Grammar Point';
   }
-  if (lowerText.includes('practice') || lowerText.includes('exercise')) {
+  if (lowerText.includes('practice') || lowerText.includes('exercise') || lowerText.includes('try this')) {
     return 'Practice Activity';
   }
-  if (lowerText.includes('homework') || lowerText.includes('assignment') || lowerText.includes('next time')) {
+  if (lowerText.includes('homework') || lowerText.includes('assignment') || lowerText.includes('next time') || lowerText.includes('for next class')) {
     return 'Homework/Conclusion';
   }
-  if (lowerText.includes('review') || lowerText.includes('summary')) {
+  if (lowerText.includes('review') || lowerText.includes('summary') || lowerText.includes('recap') || lowerText.includes('what we learned')) {
     return 'Review/Summary';
   }
   
@@ -308,10 +295,10 @@ const extractThemeColors = (themeXml: string, colorSet: Set<string>) => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(themeXml, 'text/xml');
   
-  const colors = doc.querySelectorAll('a\\:srgbClr');
+  const colors = doc.querySelectorAll('*[val]');
   colors.forEach(color => {
     const val = color.getAttribute('val');
-    if (val) {
+    if (val && val.match(/^[0-9A-Fa-f]{6}$/)) {
       colorSet.add('#' + val);
     }
   });
@@ -324,7 +311,7 @@ const determineLayoutType = (elements: SlideElement[]): string => {
   if (textElements.length === 1 && imageElements.length === 0) {
     return 'Title Slide';
   }
-  if (textElements.length > 1 && imageElements.length === 0) {
+  if (textElements.length > 3 && imageElements.length === 0) {
     return 'Text Heavy';
   }
   if (imageElements.length > 0 && textElements.length > 0) {
@@ -375,7 +362,7 @@ const determineImageAlignment = (elements: SlideElement[]): string => {
 };
 
 const extractLessonFlow = (slides: SlideAnalysis[]): string[] => {
-  return slides.map(slide => slide.contentType || slide.activityType || 'Content Slide');
+  return slides.map(slide => slide.activityType || slide.contentType || 'Content Slide');
 };
 
 const extractLogoPositions = (slides: SlideAnalysis[]): string[] => {
@@ -397,7 +384,6 @@ const extractLogoPositions = (slides: SlideAnalysis[]): string[] => {
 };
 
 const extractImageStyles = (slides: SlideAnalysis[]): string[] => {
-  const styles: string[] = [];
   const hasImages = slides.some(slide => 
     slide.elements.some(el => el.type === 'image')
   );
@@ -418,33 +404,20 @@ const analyzePedagogicalPatterns = (slides: SlideAnalysis[]) => {
     .map(slide => slide.contentType)
     .filter(Boolean) as string[];
   
-  const contentProgression = slides.map((slide, index) => {
+  // Create actual lesson flow from slides
+  const lessonFlow = slides.map((slide, index) => {
+    if (slide.activityType) return slide.activityType;
+    if (slide.contentType) return slide.contentType;
     if (index === 0) return 'Introduction';
     if (index === slides.length - 1) return 'Conclusion';
-    return slide.contentType || slide.activityType || 'Content Development';
+    return 'Content Development';
   });
-  
-  // Determine assessment methods from content
-  const assessmentMethods = [];
-  const allText = slides.flatMap(slide => 
-    slide.elements.filter(e => e.type === 'text').map(e => e.content.toLowerCase())
-  ).join(' ');
-  
-  if (allText.includes('question') || allText.includes('quiz')) {
-    assessmentMethods.push('Q&A Assessment');
-  }
-  if (allText.includes('discuss') || allText.includes('share')) {
-    assessmentMethods.push('Discussion-based Assessment');
-  }
-  if (allText.includes('practice') || allText.includes('exercise')) {
-    assessmentMethods.push('Practice-based Assessment');
-  }
   
   return {
     introductionStyle: contentTypes[0] || 'Direct Introduction',
-    contentProgression: [...new Set(contentProgression)],
+    contentProgression: lessonFlow,
     activityTypes: [...new Set(activityTypes)],
-    assessmentMethods: assessmentMethods.length > 0 ? assessmentMethods : ['Observational Assessment'],
+    assessmentMethods: ['Formative Assessment'],
     conclusionStyle: contentTypes[contentTypes.length - 1] || 'Standard Conclusion'
   };
 };
@@ -453,24 +426,26 @@ export const aggregateAnalysis = (analyses: LessonStructure[]): any => {
   const totalSlides = analyses.reduce((sum, analysis) => sum + analysis.totalSlides, 0);
   const totalLessons = analyses.length;
   
-  console.log('Aggregating analysis:', {
+  console.log('Aggregating analysis - ACCURATE COUNT:', {
     totalLessons,
     totalSlides,
-    analyses: analyses.map(a => ({ totalSlides: a.totalSlides }))
+    breakdownPerFile: analyses.map((a, i) => ({ 
+      file: i + 1, 
+      slides: a.totalSlides 
+    }))
   });
   
-  // Aggregate all activity types
+  // Aggregate all ACTUAL activity types found
   const allActivityTypes = analyses.flatMap(a => a.pedagogicalPatterns.activityTypes);
-  const uniqueActivityTypes = [...new Set(allActivityTypes)];
+  const uniqueActivityTypes = [...new Set(allActivityTypes)].filter(type => type && type !== 'Content Presentation');
   
-  // Aggregate colors with better filtering
-  const allColors = analyses.flatMap(a => [...a.designSystem.primaryColors, ...a.designSystem.secondaryColors])
-    .filter(color => color && color !== '#000000' && color !== '#FFFFFF');
-  const uniqueColors = [...new Set(allColors)];
+  // Get actual lesson flow patterns
+  const allFlowPatterns = analyses.flatMap(a => a.pedagogicalPatterns.contentProgression);
+  const uniqueFlowPatterns = [...new Set(allFlowPatterns)];
   
-  // Aggregate fonts
+  // Aggregate fonts (filter out defaults)
   const allFonts = analyses.flatMap(a => a.designSystem.fontFamilies);
-  const uniqueFonts = [...new Set(allFonts)].filter(font => font && font !== 'Arial');
+  const uniqueFonts = [...new Set(allFonts)].filter(font => font && font !== 'Arial' && font !== '');
   
   // Aggregate layouts
   const allLayouts = analyses.flatMap(a => Object.entries(a.commonLayouts));
@@ -482,37 +457,33 @@ export const aggregateAnalysis = (analyses: LessonStructure[]): any => {
   return {
     overview: {
       totalLessons,
-      totalSlides,
-      averageSlidesPerLesson: Math.round(totalSlides / totalLessons),
+      totalSlides, // This is now accurate
+      averageSlidesPerLesson: totalSlides > 0 ? Math.round(totalSlides / totalLessons) : 0,
       analysisDate: new Date().toISOString().split('T')[0]
     },
     designSystem: {
-      dominantColors: uniqueColors.slice(0, 4),
-      preferredFonts: uniqueFonts.slice(0, 3),
+      preferredFonts: uniqueFonts.length > 0 ? uniqueFonts.slice(0, 3) : ['Standard system fonts'],
       commonLayouts: Object.entries(layoutFrequency)
         .sort(([,a], [,b]) => b - a)
         .slice(0, 4)
-        .map(([layout, count]) => ({ layout, usage: Math.round((count / totalSlides) * 100) }))
+        .map(([layout, count]) => ({ 
+          layout, 
+          usage: totalSlides > 0 ? Math.round((count / totalSlides) * 100) : 0 
+        }))
     },
     pedagogicalInsights: {
       teachingStyle: 'Interactive and systematic approach with varied activities',
-      preferredActivityTypes: uniqueActivityTypes,
-      lessonStructurePattern: [
-        'Lesson Introduction',
-        'Content Presentation', 
-        'Interactive Activities',
-        'Practice & Application',
-        'Assessment & Review',
-        'Conclusion & Wrap-up'
+      preferredActivityTypes: uniqueActivityTypes.length > 0 ? uniqueActivityTypes : ['Mixed teaching activities'],
+      lessonStructurePattern: uniqueFlowPatterns.length > 0 ? uniqueFlowPatterns.slice(0, 6) : [
+        'Introduction', 'Content Presentation', 'Practice Activities', 'Assessment'
       ],
       assessmentApproach: 'Multi-modal assessment through activities and discussion'
     },
     visualPatterns: {
       imageUsage: analyses.some(a => a.designSystem.imageStyles.length > 0) ? 
         'Strategic use of visuals to support content' : 'Text-focused with minimal visuals',
-      logoPlacement: 'Consistent branding placement',
-      textFormatting: 'Clear hierarchy with readable typography',
-      spacingPattern: 'Organized layout with logical flow'
+      spacingPattern: 'Organized layout with logical progression',
+      textFormatting: 'Clear hierarchy with readable typography'
     }
   };
 };
