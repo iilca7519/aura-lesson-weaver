@@ -1,4 +1,3 @@
-
 interface SlideElement {
   type: 'text' | 'image' | 'shape' | 'chart' | 'table';
   position: { x: number; y: number; width: number; height: number };
@@ -52,36 +51,6 @@ interface LessonStructure {
     conclusionStyle: string;
   };
 }
-
-// Activity keywords mapping (based on Python code)
-const ACTIVITY_KEYWORDS = {
-  'reading': 'Reading',
-  'question': 'Question',
-  'terms': 'Terms',
-  'matching': 'Matching',
-  'fill in the blanks': 'Fill in the Blanks',
-  'fitb': 'Fill in the Blanks',
-  'sentences': 'Sentences',
-  'describing images': 'Describing Images',
-  'vocabulary': 'Vocabulary',
-  'discussion': 'Discussion',
-  'warm up': 'Warm-up',
-  'warm-up': 'Warm-up',
-  'pair work': 'Pair Work',
-  'group work': 'Group Work',
-  'role play': 'Role Play',
-  'listening': 'Listening',
-  'writing': 'Writing',
-  'speaking': 'Speaking',
-  'grammar': 'Grammar',
-  'practice': 'Practice',
-  'exercise': 'Exercise',
-  'game': 'Game',
-  'homework': 'Homework',
-  'review': 'Review',
-  'brainstorm': 'Brainstorming',
-  'presentation': 'Presentation'
-};
 
 // Enhanced PowerPoint parsing implementation
 export const analyzePowerPointFile = async (file: File): Promise<LessonStructure> => {
@@ -256,107 +225,99 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   
   console.log(`=== ANALYZING SLIDE ${slideNumber} ===`);
   
-  // Strategy 1: Look for explicit title shapes (PowerPoint standard)
-  // Check for title placeholders with type="title" or similar
-  const titlePlaceholders = doc.querySelectorAll('p\\:ph[type="title"], p\\:ph[type="ctrTitle"], ph[type="title"], ph[type="ctrTitle"]');
+  // Namespace resolver for PowerPoint XML
+  const namespaceResolver = (prefix: string) => {
+    const namespaces = {
+      'p': 'http://schemas.openxmlformats.org/presentationml/2006/main',
+      'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+      'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    };
+    return namespaces[prefix] || null;
+  };
   
-  if (titlePlaceholders.length > 0) {
-    for (const placeholder of titlePlaceholders) {
-      const parentShape = placeholder.closest('p\\:sp') || placeholder.closest('sp');
-      if (parentShape) {
-        const textBody = parentShape.querySelector('p\\:txBody, txBody');
-        if (textBody) {
-          const textElements = textBody.querySelectorAll('a\\:t, t');
-          const titleTexts = Array.from(textElements)
-            .map(el => el.textContent?.trim())
-            .filter(Boolean);
-          if (titleTexts.length > 0) {
-            slideTitle = titleTexts.join(' ').trim();
-            console.log(`Found title via title placeholder: "${slideTitle}"`);
-            break;
-          }
-        }
+  // Strategy 1: Use XPath with proper namespace resolution for title placeholders
+  try {
+    const titleXPath = "//p:sp[p:nvSpPr/p:nvPr/p:ph[@type='title']]/p:txBody//a:t";
+    const titleResult = doc.evaluate(
+      titleXPath,
+      doc,
+      namespaceResolver,
+      XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+      null
+    );
+    
+    const titleTexts = [];
+    for (let i = 0; i < titleResult.snapshotLength; i++) {
+      const textNode = titleResult.snapshotItem(i);
+      if (textNode && textNode.textContent?.trim()) {
+        titleTexts.push(textNode.textContent.trim());
       }
     }
+    
+    if (titleTexts.length > 0) {
+      slideTitle = titleTexts.join(' ').trim();
+      console.log(`Found title via XPath title placeholder: "${slideTitle}"`);
+    }
+  } catch (error) {
+    console.log('XPath with namespaces failed, trying alternative approach');
   }
   
-  // Strategy 2: If no title found, use heuristic approach (largest font or highest position)
+  // Strategy 2: Fallback - Look for title by shape name
   if (!slideTitle) {
-    const candidateTexts: Array<{
-      text: string;
-      fontSize: number;
-      topPosition: number;
-      shape: Element;
-    }> = [];
-    
-    // Look through all shapes for text content
-    const shapes = doc.querySelectorAll('p\\:sp, sp');
-    
-    for (const shape of shapes) {
-      const textBody = shape.querySelector('p\\:txBody, txBody');
-      if (!textBody) continue;
+    try {
+      const titleByNameXPath = "//p:sp[p:nvSpPr/p:cNvPr[starts-with(@name,'Title')]]/p:txBody//a:t";
+      const titleResult = doc.evaluate(
+        titleByNameXPath,
+        doc,
+        namespaceResolver,
+        XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+        null
+      );
       
-      // Get shape position
-      const spPr = shape.querySelector('p\\:spPr, spPr');
-      const xfrm = spPr?.querySelector('a\\:xfrm, xfrm');
-      const off = xfrm?.querySelector('a\\:off, off');
-      const topPosition = off ? parseInt(off.getAttribute('y') || '0') : 0;
-      
-      // Look through paragraphs and runs
-      const paragraphs = textBody.querySelectorAll('a\\:p, p');
-      for (const paragraph of paragraphs) {
-        const runs = paragraph.querySelectorAll('a\\:r, r');
-        
-        for (const run of runs) {
-          const textElement = run.querySelector('a\\:t, t');
-          const text = textElement?.textContent?.trim();
-          
-          if (!text || text.length < 2) continue;
-          
-          // Get font size from run properties
-          const rPr = run.querySelector('a\\:rPr, rPr');
-          const sizeAttr = rPr?.getAttribute('sz');
-          const fontSize = sizeAttr ? parseInt(sizeAttr) / 100 : 12; // PowerPoint stores font size * 100
-          
-          candidateTexts.push({
-            text,
-            fontSize,
-            topPosition,
-            shape
-          });
+      const titleTexts = [];
+      for (let i = 0; i < titleResult.snapshotLength; i++) {
+        const textNode = titleResult.snapshotItem(i);
+        if (textNode && textNode.textContent?.trim()) {
+          titleTexts.push(textNode.textContent.trim());
         }
-        
-        // Also check for text directly in paragraph without runs
-        const directText = paragraph.querySelector('a\\:t, t');
-        if (directText && directText.textContent?.trim()) {
-          const text = directText.textContent.trim();
-          if (text.length >= 2) {
-            candidateTexts.push({
-              text,
-              fontSize: 12, // default
-              topPosition,
-              shape
-            });
+      }
+      
+      if (titleTexts.length > 0) {
+        slideTitle = titleTexts.join(' ').trim();
+        console.log(`Found title via XPath name pattern: "${slideTitle}"`);
+      }
+    } catch (error) {
+      console.log('XPath title by name failed, using DOM approach');
+    }
+  }
+  
+  // Strategy 3: DOM-based fallback (original approach but improved)
+  if (!slideTitle) {
+    // Look for explicit title shapes (PowerPoint standard)
+    const titlePlaceholders = doc.querySelectorAll('p\\:ph[type="title"], p\\:ph[type="ctrTitle"], ph[type="title"], ph[type="ctrTitle"]');
+    
+    if (titlePlaceholders.length > 0) {
+      for (const placeholder of titlePlaceholders) {
+        const parentShape = placeholder.closest('p\\:sp') || placeholder.closest('sp');
+        if (parentShape) {
+          const textBody = parentShape.querySelector('p\\:txBody, txBody');
+          if (textBody) {
+            const textElements = textBody.querySelectorAll('a\\:t, t');
+            const titleTexts = Array.from(textElements)
+              .map(el => el.textContent?.trim())
+              .filter(Boolean);
+            if (titleTexts.length > 0) {
+              slideTitle = titleTexts.join(' ').trim();
+              console.log(`Found title via DOM title placeholder: "${slideTitle}"`);
+              break;
+            }
           }
         }
       }
     }
-    
-    if (candidateTexts.length > 0) {
-      // Sort by font size (descending) and then by position (ascending - higher on slide)
-      candidateTexts.sort((a, b) => {
-        if (Math.abs(a.fontSize - b.fontSize) > 2) {
-          return b.fontSize - a.fontSize; // Larger font first
-        }
-        return a.topPosition - b.topPosition; // Higher position first
-      });
-      
-      slideTitle = candidateTexts[0].text;
-      console.log(`Found title via heuristic (fontSize: ${candidateTexts[0].fontSize}, position: ${candidateTexts[0].topPosition}): "${slideTitle}"`);
-    }
   }
   
-  // Strategy 3: Final fallback - get first significant text if still no title
+  // Strategy 4: Final fallback - get first significant text if still no title
   if (!slideTitle) {
     const allTextElements = doc.querySelectorAll('a\\:t, t');
     for (const textEl of allTextElements) {
@@ -403,7 +364,8 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   console.log(`Slide ${slideNumber} - Final extracted title: "${slideTitle}"`);
   console.log(`Slide ${slideNumber} - All text length: ${allText.length}`);
   
-  // Extract activity types based on keywords (following Python approach)
+  // Import and use the simple activity type detection
+  const { extractActivityTypesFromSlide } = await import('./activityTypeDetection');
   const activityTypes = extractActivityTypesFromSlide(slideTitle, allText);
   const primaryActivityType = activityTypes.length > 0 ? activityTypes.join(', ') : 'Content Slide';
   
@@ -428,34 +390,6 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
     activityType: primaryActivityType,
     contentType
   };
-};
-
-// New function to extract activity types based on keywords (following Python approach)
-const extractActivityTypesFromSlide = (slideTitle: string, allText: string): string[] => {
-  const foundActivities = new Set<string>();
-  
-  // Combine title and all text for comprehensive search
-  const combinedText = (slideTitle + ' ' + allText).toLowerCase();
-  
-  console.log(`Searching for activities in: "${combinedText.substring(0, 200)}..."`);
-  
-  // Check for activity keywords
-  for (const [keyword, activity] of Object.entries(ACTIVITY_KEYWORDS)) {
-    if (combinedText.includes(keyword.toLowerCase())) {
-      foundActivities.add(activity);
-      console.log(`Found activity "${activity}" via keyword "${keyword}"`);
-    }
-  }
-  
-  // Special case for copyright slides - exclude Reading activity
-  if (combinedText.includes('copyright') && combinedText.includes('lessonspeak')) {
-    foundActivities.delete('Reading');
-    console.log('Excluded Reading activity due to copyright content');
-  }
-  
-  // Return sorted array of found activities
-  const activities = Array.from(foundActivities).sort();
-  return activities.length > 0 ? activities : ['Content Slide'];
 };
 
 const determineContentType = (text: string): string => {
