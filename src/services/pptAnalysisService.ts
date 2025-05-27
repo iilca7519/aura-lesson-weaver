@@ -1,3 +1,4 @@
+
 interface SlideElement {
   type: 'text' | 'image' | 'shape' | 'chart' | 'table';
   position: { x: number; y: number; width: number; height: number };
@@ -51,6 +52,36 @@ interface LessonStructure {
     conclusionStyle: string;
   };
 }
+
+// Activity keywords mapping (based on Python code)
+const ACTIVITY_KEYWORDS = {
+  'reading': 'Reading',
+  'question': 'Question',
+  'terms': 'Terms',
+  'matching': 'Matching',
+  'fill in the blanks': 'Fill in the Blanks',
+  'fitb': 'Fill in the Blanks',
+  'sentences': 'Sentences',
+  'describing images': 'Describing Images',
+  'vocabulary': 'Vocabulary',
+  'discussion': 'Discussion',
+  'warm up': 'Warm-up',
+  'warm-up': 'Warm-up',
+  'pair work': 'Pair Work',
+  'group work': 'Group Work',
+  'role play': 'Role Play',
+  'listening': 'Listening',
+  'writing': 'Writing',
+  'speaking': 'Speaking',
+  'grammar': 'Grammar',
+  'practice': 'Practice',
+  'exercise': 'Exercise',
+  'game': 'Game',
+  'homework': 'Homework',
+  'review': 'Review',
+  'brainstorm': 'Brainstorming',
+  'presentation': 'Presentation'
+};
 
 // Enhanced PowerPoint parsing implementation
 export const analyzePowerPointFile = async (file: File): Promise<LessonStructure> => {
@@ -146,7 +177,7 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
             colorScheme: [],
             fontHierarchy: []
           },
-          activityType: 'Content Presentation',
+          activityType: 'Content Slide',
           contentType: 'Main Content'
         });
       }
@@ -167,10 +198,10 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
             colorScheme: [],
             fontHierarchy: []
           },
-          activityType: 'Content Presentation',
+          activityType: 'Content Slide',
           contentType: 'Main Content'
         });
-        designElements.activityTypes.add('Content Presentation');
+        designElements.activityTypes.add('Content Slide');
         designElements.contentTypes.add('Main Content');
       }
     }
@@ -372,21 +403,15 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   console.log(`Slide ${slideNumber} - Final extracted title: "${slideTitle}"`);
   console.log(`Slide ${slideNumber} - All text length: ${allText.length}`);
   
-  // Now determine activity type using the extracted title
-  let activityType = 'Content Slide';
-  if (slideTitle && slideTitle.length > 0) {
-    activityType = determineActivityTypeFromTitle(slideTitle);
-    console.log(`Slide ${slideNumber} - Activity type from title "${slideTitle}": "${activityType}"`);
-  } else {
-    // Fallback to content analysis if no title found
-    activityType = determineActivityType(allText);
-    console.log(`Slide ${slideNumber} - Activity type from content: "${activityType}"`);
-  }
+  // Extract activity types based on keywords (following Python approach)
+  const activityTypes = extractActivityTypesFromSlide(slideTitle, allText);
+  const primaryActivityType = activityTypes.length > 0 ? activityTypes.join(', ') : 'Content Slide';
+  
+  console.log(`Slide ${slideNumber} - Found activity types: [${activityTypes.join(', ')}]`);
+  console.log(`Slide ${slideNumber} - Primary activity type: "${primaryActivityType}"`);
   
   const contentType = determineContentType(allText);
   const layoutType = determineLayoutType(elements);
-  
-  console.log(`Slide ${slideNumber} FINAL RESULT - Title: "${slideTitle}" -> Activity: "${activityType}"`);
   
   return {
     slideNumber,
@@ -400,285 +425,37 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
       colorScheme: [...new Set(colorScheme)],
       fontHierarchy: [...new Set(fontHierarchy)]
     },
-    activityType,
+    activityType: primaryActivityType,
     contentType
   };
 };
 
-const cleanAndFormatTitle = (title: string): string => {
-  // Clean up the title and use it directly as activity type
-  let cleaned = title.trim();
+// New function to extract activity types based on keywords (following Python approach)
+const extractActivityTypesFromSlide = (slideTitle: string, allText: string): string[] => {
+  const foundActivities = new Set<string>();
   
-  // Remove common prefixes/suffixes that aren't part of the activity name
-  cleaned = cleaned.replace(/^(slide\s*\d+:?\s*|activity\s*\d+:?\s*)/i, '');
-  cleaned = cleaned.replace(/\s*-\s*slide\s*\d+$/i, '');
+  // Combine title and all text for comprehensive search
+  const combinedText = (slideTitle + ' ' + allText).toLowerCase();
   
-  // Capitalize first letter of each word for consistent formatting
-  cleaned = cleaned.split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
+  console.log(`Searching for activities in: "${combinedText.substring(0, 200)}..."`);
   
-  // If title is too short or generic, provide a default
-  if (cleaned.length < 2 || cleaned.toLowerCase() === 'title') {
-    return 'Content Slide';
+  // Check for activity keywords
+  for (const [keyword, activity] of Object.entries(ACTIVITY_KEYWORDS)) {
+    if (combinedText.includes(keyword.toLowerCase())) {
+      foundActivities.add(activity);
+      console.log(`Found activity "${activity}" via keyword "${keyword}"`);
+    }
   }
   
-  return cleaned;
-};
-
-const determineActivityTypeFromTitle = (title: string): string => {
-  const lowerTitle = title.toLowerCase().trim();
-  
-  console.log(`Analyzing title for activity type: "${title}"`);
-  
-  // Direct activity type matches from title
-  if (lowerTitle.includes('warm up') || lowerTitle.includes('warm-up') || lowerTitle.includes('warmer')) {
-    return 'Warm-up Activity';
+  // Special case for copyright slides - exclude Reading activity
+  if (combinedText.includes('copyright') && combinedText.includes('lessonspeak')) {
+    foundActivities.delete('Reading');
+    console.log('Excluded Reading activity due to copyright content');
   }
   
-  if (lowerTitle.includes('discussion') || lowerTitle.includes('discuss')) {
-    return 'Discussion Activity';
-  }
-  
-  if (lowerTitle.includes('pair work') || lowerTitle.includes('pair activity') || lowerTitle.includes('pairs')) {
-    return 'Pair Work';
-  }
-  
-  if (lowerTitle.includes('group work') || lowerTitle.includes('group activity') || lowerTitle.includes('groups')) {
-    return 'Group Activity';
-  }
-  
-  if (lowerTitle.includes('role play') || lowerTitle.includes('roleplay') || lowerTitle.includes('role-play')) {
-    return 'Role Playing';
-  }
-  
-  if (lowerTitle.includes('vocabulary') || lowerTitle.includes('vocab')) {
-    return 'Vocabulary Activity';
-  }
-  
-  if (lowerTitle.includes('grammar') || lowerTitle.includes('language focus')) {
-    return 'Grammar Activity';
-  }
-  
-  if (lowerTitle.includes('listening') || lowerTitle.includes('listen')) {
-    return 'Listening Activity';
-  }
-  
-  if (lowerTitle.includes('reading') || lowerTitle.includes('read')) {
-    return 'Reading Activity';
-  }
-  
-  if (lowerTitle.includes('writing') || lowerTitle.includes('write')) {
-    return 'Writing Activity';
-  }
-  
-  if (lowerTitle.includes('speaking') || lowerTitle.includes('speak')) {
-    return 'Speaking Activity';
-  }
-  
-  if (lowerTitle.includes('practice') || lowerTitle.includes('drill')) {
-    return 'Practice Activity';
-  }
-  
-  if (lowerTitle.includes('game') || lowerTitle.includes('fun activity')) {
-    return 'Game Activity';
-  }
-  
-  if (lowerTitle.includes('presentation') || lowerTitle.includes('present')) {
-    return 'Presentation Activity';
-  }
-  
-  if (lowerTitle.includes('review') || lowerTitle.includes('revision')) {
-    return 'Review Activity';
-  }
-  
-  if (lowerTitle.includes('homework') || lowerTitle.includes('assignment')) {
-    return 'Homework Assignment';
-  }
-  
-  if (lowerTitle.includes('introduction') || lowerTitle.includes('intro')) {
-    return 'Introduction';
-  }
-  
-  if (lowerTitle.includes('objective') || lowerTitle.includes('aims') || lowerTitle.includes('goals')) {
-    return 'Learning Objectives';
-  }
-  
-  if (lowerTitle.includes('conclusion') || lowerTitle.includes('summary') || lowerTitle.includes('wrap up')) {
-    return 'Conclusion';
-  }
-  
-  if (lowerTitle.includes('brainstorm') || lowerTitle.includes('ideas')) {
-    return 'Brainstorming Activity';
-  }
-  
-  if (lowerTitle.includes('match') || lowerTitle.includes('matching')) {
-    return 'Matching Activity';
-  }
-  
-  if (lowerTitle.includes('gap fill') || lowerTitle.includes('fill in') || lowerTitle.includes('complete')) {
-    return 'Gap Fill Activity';
-  }
-  
-  // If title doesn't match specific patterns, use the title itself as activity type if it's descriptive
-  if (title.length > 3 && title.length < 50) {
-    // Capitalize first letter of each word for better presentation
-    const cleanTitle = title.split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
-    console.log(`Using cleaned title as activity type: "${cleanTitle}"`);
-    return cleanTitle;
-  }
-  
-  return 'Content Presentation';
-};
-
-const determineActivityType = (text: string): string => {
-  const lowerText = text.toLowerCase();
-  
-  // More comprehensive activity detection with broader patterns
-  if (lowerText.includes('discuss') || lowerText.includes('discussion') || lowerText.includes('talk about') || 
-      lowerText.includes('share your thoughts') || lowerText.includes('what do you think') || 
-      lowerText.includes('opinion') || lowerText.includes('debate')) {
-    return 'Discussion Activity';
-  }
-  
-  if (lowerText.includes('pair work') || lowerText.includes('work with partner') || 
-      lowerText.includes('partner activity') || lowerText.includes('work in pairs') ||
-      lowerText.includes('find a partner')) {
-    return 'Pair Work';
-  }
-  
-  if (lowerText.includes('group work') || lowerText.includes('in groups') || 
-      lowerText.includes('team activity') || lowerText.includes('work together') ||
-      lowerText.includes('form groups') || lowerText.includes('group of')) {
-    return 'Group Activity';
-  }
-  
-  if (lowerText.includes('role play') || lowerText.includes('roleplay') || 
-      lowerText.includes('act out') || lowerText.includes('pretend you are') ||
-      lowerText.includes('imagine you are') || lowerText.includes('scenario')) {
-    return 'Role Playing';
-  }
-  
-  if (lowerText.includes('match') || lowerText.includes('matching') || 
-      lowerText.includes('connect the') || lowerText.includes('link the') ||
-      lowerText.includes('pair up') || lowerText.includes('corresponds')) {
-    return 'Matching Exercise';
-  }
-  
-  if (lowerText.includes('fill in') || lowerText.includes('complete the') || 
-      lowerText.includes('fill the blank') || lowerText.includes('gap fill') ||
-      lowerText.includes('missing word') || lowerText.includes('blank')) {
-    return 'Gap Fill Activity';
-  }
-  
-  if (lowerText.includes('listen') || lowerText.includes('listening') || 
-      lowerText.includes('audio') || lowerText.includes('hear the') ||
-      lowerText.includes('sound') || lowerText.includes('recording')) {
-    return 'Listening Activity';
-  }
-  
-  if (lowerText.includes('read') || lowerText.includes('reading') || 
-      lowerText.includes('passage') || lowerText.includes('text analysis') ||
-      lowerText.includes('article') || lowerText.includes('story')) {
-    return 'Reading Activity';
-  }
-  
-  if (lowerText.includes('write') || lowerText.includes('writing') || 
-      lowerText.includes('composition') || lowerText.includes('essay') ||
-      lowerText.includes('paragraph') || lowerText.includes('journal')) {
-    return 'Writing Activity';
-  }
-  
-  if (lowerText.includes('vocabulary') || lowerText.includes('new words') || 
-      lowerText.includes('definitions') || lowerText.includes('word study') ||
-      lowerText.includes('meaning') || lowerText.includes('synonym') ||
-      lowerText.includes('antonym')) {
-    return 'Vocabulary Building';
-  }
-  
-  if (lowerText.includes('question') || lowerText.includes('answer') || 
-      lowerText.includes('quiz') || lowerText.includes('q&a') ||
-      lowerText.includes('test') || lowerText.includes('check your understanding')) {
-    return 'Q&A Session';
-  }
-  
-  if (lowerText.includes('practice') || lowerText.includes('exercise') || 
-      lowerText.includes('drill') || lowerText.includes('try this') ||
-      lowerText.includes('let\'s practice') || lowerText.includes('your turn')) {
-    return 'Practice Exercise';
-  }
-  
-  if (lowerText.includes('present') || lowerText.includes('presentation') || 
-      lowerText.includes('show') || lowerText.includes('demonstrate') ||
-      lowerText.includes('explain to class') || lowerText.includes('share with')) {
-    return 'Presentation Activity';
-  }
-  
-  if (lowerText.includes('game') || lowerText.includes('play') || 
-      lowerText.includes('fun activity') || lowerText.includes('competition') ||
-      lowerText.includes('challenge') || lowerText.includes('race')) {
-    return 'Game Activity';
-  }
-  
-  if (lowerText.includes('homework') || lowerText.includes('assignment') || 
-      lowerText.includes('for next class') || lowerText.includes('at home') ||
-      lowerText.includes('take home')) {
-    return 'Homework Assignment';
-  }
-  
-  if (lowerText.includes('review') || lowerText.includes('summary') || 
-      lowerText.includes('recap') || lowerText.includes('what we learned')) {
-    return 'Review Activity';
-  }
-  
-  if (lowerText.includes('warm up') || lowerText.includes('warm-up') || 
-      lowerText.includes('ice breaker') || lowerText.includes('getting started') ||
-      lowerText.includes('opener')) {
-    return 'Warm-up Activity';
-  }
-  
-  if (lowerText.includes('brainstorm') || lowerText.includes('think of') || 
-      lowerText.includes('come up with') || lowerText.includes('ideas') ||
-      lowerText.includes('suggest')) {
-    return 'Brainstorming';
-  }
-  
-  // Check for instructional content patterns
-  if (lowerText.includes('objective') || lowerText.includes('goal') || 
-      lowerText.includes('aim') || lowerText.includes('by the end') ||
-      lowerText.includes('learning outcomes')) {
-    return 'Learning Objectives';
-  }
-  
-  if (lowerText.includes('grammar') || lowerText.includes('structure') || 
-      lowerText.includes('language point') || lowerText.includes('tense') ||
-      lowerText.includes('verb') || lowerText.includes('noun')) {
-    return 'Grammar Instruction';
-  }
-  
-  // Default based on slide position and common patterns
-  if (lowerText.includes('welcome') || lowerText.includes('hello') || 
-      lowerText.includes('good morning') || lowerText.includes('introduction')) {
-    return 'Introduction Slide';
-  }
-  
-  if (lowerText.includes('thank you') || lowerText.includes('goodbye') || 
-      lowerText.includes('see you next') || lowerText.includes('conclusion')) {
-    return 'Conclusion Slide';
-  }
-  
-  // Check content length and complexity to determine activity type
-  if (lowerText.length > 200) {
-    return 'Content Explanation';
-  }
-  
-  if (lowerText.length < 50 && (lowerText.includes('?') || lowerText.includes('activity'))) {
-    return 'Quick Activity';
-  }
-  
-  return 'Content Presentation';
+  // Return sorted array of found activities
+  const activities = Array.from(foundActivities).sort();
+  return activities.length > 0 ? activities : ['Content Slide'];
 };
 
 const determineContentType = (text: string): string => {
