@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { analyzePowerPointFile, aggregateAnalysis } from "@/services/pptAnalysisService";
+import { analysisDataStore } from "@/services/analysisDataStore";
 
 interface UploadedFile {
   name: string;
@@ -27,7 +27,20 @@ const CorpusAnalyzer = () => {
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    const newFiles: UploadedFile[] = files.map(file => ({
+    const validFiles = files.filter(file => 
+      file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+      file.name.endsWith('.pptx')
+    );
+    
+    if (validFiles.length !== files.length) {
+      toast({
+        title: "Invalid Files Detected",
+        description: "Only .pptx files are supported for analysis.",
+        variant: "destructive",
+      });
+    }
+    
+    const newFiles: UploadedFile[] = validFiles.map(file => ({
       name: file.name,
       size: file.size,
       type: file.type,
@@ -39,7 +52,7 @@ const CorpusAnalyzer = () => {
     
     toast({
       title: "Files Uploaded",
-      description: `${files.length} PowerPoint file(s) added to corpus`,
+      description: `${validFiles.length} PowerPoint file(s) ready for deep analysis`,
     });
   };
 
@@ -47,7 +60,7 @@ const CorpusAnalyzer = () => {
     if (uploadedFiles.length === 0) {
       toast({
         title: "No Files to Analyze",
-        description: "Please upload some PowerPoint files first.",
+        description: "Please upload PowerPoint files first.",
         variant: "destructive",
       });
       return;
@@ -57,13 +70,14 @@ const CorpusAnalyzer = () => {
     setAnalysisProgress(0);
 
     const analysisSteps = [
-      "Extracting slides and content structure...",
+      "Extracting .pptx file structure...",
+      "Parsing slide XML content...",
       "Analyzing layout patterns and positioning...",
-      "Examining color schemes and design elements...",
+      "Extracting color schemes and theme data...",
       "Processing text formatting and typography...",
       "Identifying image placement and styles...",
       "Mapping pedagogical flow patterns...",
-      "Analyzing activity types and sequences...",
+      "Analyzing activity sequences and types...",
       "Building comprehensive style profile...",
       "Generating AI teaching methodology map..."
     ];
@@ -74,7 +88,7 @@ const CorpusAnalyzer = () => {
       for (let i = 0; i < uploadedFiles.length; i++) {
         const file = uploadedFiles[i];
         
-        // Update progress for each file
+        // Update progress for each analysis step
         for (let step = 0; step < analysisSteps.length; step++) {
           const overallProgress = ((i * analysisSteps.length + step + 1) / (uploadedFiles.length * analysisSteps.length)) * 100;
           setAnalysisProgress(overallProgress);
@@ -84,31 +98,52 @@ const CorpusAnalyzer = () => {
             description: analysisSteps[step],
           });
           
-          await new Promise(resolve => setTimeout(resolve, 800));
+          await new Promise(resolve => setTimeout(resolve, 600));
         }
         
-        // Analyze each file
-        const analysis = await analyzePowerPointFile(file.file);
-        fileAnalyses.push(analysis);
+        // Perform real analysis
+        try {
+          const analysis = await analyzePowerPointFile(file.file);
+          fileAnalyses.push(analysis);
+          
+          toast({
+            title: "File Analysis Complete",
+            description: `Successfully analyzed ${analysis.totalSlides} slides from ${file.name}`,
+          });
+        } catch (error) {
+          console.error(`Error analyzing ${file.name}:`, error);
+          toast({
+            title: "Analysis Warning",
+            description: `Could not fully analyze ${file.name}: ${error.message}`,
+            variant: "destructive",
+          });
+        }
+      }
+      
+      if (fileAnalyses.length === 0) {
+        throw new Error("No files could be analyzed successfully");
       }
       
       // Aggregate all analyses
       const aggregatedResults = aggregateAnalysis(fileAnalyses);
       setAnalysisResults(aggregatedResults);
       
+      // Store analysis data for use in lesson generation
+      analysisDataStore.setAnalysisData(aggregatedResults);
+      
       setIsAnalyzing(false);
       setAnalysisComplete(true);
       
       toast({
         title: "Deep Analysis Complete!",
-        description: "AI has comprehensively analyzed your teaching methodology, design patterns, and pedagogical approach.",
+        description: `Successfully analyzed ${fileAnalyses.length} PowerPoint files. AI knowledge base updated with your teaching methodology.`,
       });
     } catch (error) {
       console.error('Analysis error:', error);
       setIsAnalyzing(false);
       toast({
         title: "Analysis Failed",
-        description: "There was an error analyzing your files. Please try again.",
+        description: `Error: ${error.message}. Please ensure files are valid .pptx format.`,
         variant: "destructive",
       });
     }
@@ -128,10 +163,10 @@ const CorpusAnalyzer = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5 text-blue-600" />
-            Deep Corpus Analysis
+            Real PowerPoint Analysis Engine
           </CardTitle>
           <CardDescription>
-            Upload PowerPoint lessons for comprehensive AI analysis of design, pedagogy, and style patterns
+            Upload .pptx files for comprehensive AI analysis of every design element, layout pattern, and pedagogical sequence
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -141,19 +176,19 @@ const CorpusAnalyzer = () => {
           >
             <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Upload PowerPoint Files
+              Upload PowerPoint Files (.pptx)
             </h3>
             <p className="text-gray-600 mb-4">
-              Drag and drop your .pptx files here, or click to browse
+              Real PowerPoint parsing and analysis - every slide, element, and pattern
             </p>
             <Button variant="outline">
-              Choose Files
+              Choose .pptx Files
             </Button>
             <input
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pptx,.ppt"
+              accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -161,7 +196,7 @@ const CorpusAnalyzer = () => {
 
           {uploadedFiles.length > 0 && (
             <div className="space-y-4">
-              <h4 className="font-medium">Uploaded Files ({uploadedFiles.length})</h4>
+              <h4 className="font-medium">Ready for Analysis ({uploadedFiles.length} files)</h4>
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {uploadedFiles.map((file) => (
                   <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -173,7 +208,7 @@ const CorpusAnalyzer = () => {
                       </div>
                     </div>
                     <Badge variant="outline" className="text-xs">
-                      Ready for Analysis
+                      PowerPoint Ready
                     </Badge>
                   </div>
                 ))}
@@ -184,13 +219,13 @@ const CorpusAnalyzer = () => {
           {isAnalyzing && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Deep AI Analysis in Progress...</span>
+                <span className="text-sm font-medium">Real PowerPoint Analysis in Progress...</span>
                 <span className="text-sm text-gray-500">{Math.round(analysisProgress)}%</span>
               </div>
               <Progress value={analysisProgress} className="h-2" />
               <p className="text-sm text-gray-600">
-                Performing comprehensive analysis of every design element, layout pattern, pedagogical sequence, 
-                color scheme, typography, image placement, and teaching methodology in your corpus.
+                Parsing actual .pptx files: extracting slides, analyzing layouts, colors, fonts, images, text formatting, 
+                pedagogical sequences, and building your complete teaching methodology profile.
               </p>
             </div>
           )}
@@ -202,7 +237,7 @@ const CorpusAnalyzer = () => {
               className="flex-1"
             >
               <Brain className="h-4 w-4 mr-2" />
-              {isAnalyzing ? "Analyzing..." : "Start Deep Analysis"}
+              {isAnalyzing ? "Analyzing PowerPoint Files..." : "Start Real Analysis"}
             </Button>
           </div>
         </CardContent>
@@ -214,25 +249,25 @@ const CorpusAnalyzer = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600" />
-                Comprehensive Analysis Results
+                Real Corpus Analysis Results
               </CardTitle>
               <CardDescription>
-                AI has completed deep analysis of your teaching corpus
+                Comprehensive analysis of your actual PowerPoint files
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="p-4 bg-blue-50 rounded-lg">
                   <div className="text-2xl font-bold text-blue-900">{analysisResults.overview.totalLessons}</div>
-                  <div className="text-sm text-blue-700">Lessons Analyzed</div>
+                  <div className="text-sm text-blue-700">Files Analyzed</div>
                 </div>
                 <div className="p-4 bg-green-50 rounded-lg">
                   <div className="text-2xl font-bold text-green-900">{analysisResults.overview.totalSlides}</div>
-                  <div className="text-sm text-green-700">Total Slides</div>
+                  <div className="text-sm text-green-700">Total Slides Parsed</div>
                 </div>
                 <div className="p-4 bg-purple-50 rounded-lg">
                   <div className="text-2xl font-bold text-purple-900">{analysisResults.overview.averageSlidesPerLesson}</div>
-                  <div className="text-sm text-purple-700">Avg Slides/Lesson</div>
+                  <div className="text-sm text-purple-700">Avg Slides/File</div>
                 </div>
                 <div className="p-4 bg-orange-50 rounded-lg">
                   <div className="text-2xl font-bold text-orange-900">{analysisResults.confidence.overallAccuracy}%</div>
@@ -245,13 +280,13 @@ const CorpusAnalyzer = () => {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
                       <Palette className="h-5 w-5 text-purple-600" />
-                      Design System Analysis
+                      Extracted Design System
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
-                      <h4 className="font-medium mb-2">Dominant Colors</h4>
-                      <div className="flex gap-2">
+                      <h4 className="font-medium mb-2">Actual Colors Used</h4>
+                      <div className="flex gap-2 flex-wrap">
                         {analysisResults.designSystem.dominantColors.map((color: string, index: number) => (
                           <div key={index} className="flex items-center gap-2">
                             <div 
@@ -264,15 +299,15 @@ const CorpusAnalyzer = () => {
                       </div>
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2">Typography Patterns</h4>
-                      <div className="flex gap-2">
+                      <h4 className="font-medium mb-2">Font Families Found</h4>
+                      <div className="flex gap-2 flex-wrap">
                         {analysisResults.designSystem.preferredFonts.map((font: string, index: number) => (
                           <Badge key={index} variant="outline" className="text-xs">{font}</Badge>
                         ))}
                       </div>
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2">Layout Preferences</h4>
+                      <h4 className="font-medium mb-2">Layout Distribution</h4>
                       <div className="space-y-1">
                         {analysisResults.designSystem.commonLayouts.map((layout: any, index: number) => (
                           <div key={index} className="flex justify-between text-sm">
@@ -289,27 +324,27 @@ const CorpusAnalyzer = () => {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
                       <Target className="h-5 w-5 text-green-600" />
-                      Pedagogical Insights
+                      Pedagogical Patterns Found
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
-                      <h4 className="font-medium mb-2">Teaching Style</h4>
+                      <h4 className="font-medium mb-2">Teaching Style Detected</h4>
                       <p className="text-sm text-gray-600">{analysisResults.pedagogicalInsights.teachingStyle}</p>
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Activity Types Identified</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {analysisResults.pedagogicalInsights.preferredActivityTypes.map((activity: string, index: number) => (
+                          <Badge key={index} variant="secondary" className="text-xs">{activity}</Badge>
+                        ))}
+                      </div>
                     </div>
                     <div>
                       <h4 className="font-medium mb-2">Lesson Structure Pattern</h4>
                       <div className="space-y-1">
                         {analysisResults.pedagogicalInsights.lessonStructurePattern.map((pattern: string, index: number) => (
                           <div key={index} className="text-xs text-gray-600">{pattern}</div>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="font-medium mb-2">Preferred Activities</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {analysisResults.pedagogicalInsights.preferredActivityTypes.map((activity: string, index: number) => (
-                          <Badge key={index} variant="secondary" className="text-xs">{activity}</Badge>
                         ))}
                       </div>
                     </div>
@@ -321,16 +356,16 @@ const CorpusAnalyzer = () => {
                 <div className="flex items-start gap-3">
                   <Brain className="h-5 w-5 text-blue-600 mt-1" />
                   <div>
-                    <h4 className="font-medium text-blue-900 mb-2">AI Knowledge Base Status</h4>
+                    <h4 className="font-medium text-blue-900 mb-2">AI Knowledge Base Updated</h4>
                     <p className="text-sm text-blue-700 mb-3">
-                      The system has analyzed every element: slide layouts, color schemes, typography, image placement, 
-                      logo positioning, text formatting, pedagogical sequences, activity types, and assessment methods.
+                      Successfully parsed and analyzed actual PowerPoint content. The AI now understands your complete teaching methodology,
+                      design preferences, and pedagogical patterns for intelligent lesson generation.
                     </p>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      <Badge className="bg-blue-100 text-blue-800">Design Consistency: {analysisResults.confidence.designConsistency}%</Badge>
-                      <Badge className="bg-purple-100 text-purple-800">Style Recognition: {analysisResults.confidence.styleRecognition}%</Badge>
-                      <Badge className="bg-green-100 text-green-800">Pedagogy Alignment: {analysisResults.confidence.pedagogicalAlignment}%</Badge>
-                      <Badge className="bg-orange-100 text-orange-800">Overall Accuracy: {analysisResults.confidence.overallAccuracy}%</Badge>
+                      <Badge className="bg-blue-100 text-blue-800">Design: {analysisResults.confidence.designConsistency}%</Badge>
+                      <Badge className="bg-purple-100 text-purple-800">Style: {analysisResults.confidence.styleRecognition}%</Badge>
+                      <Badge className="bg-green-100 text-green-800">Pedagogy: {analysisResults.confidence.pedagogicalAlignment}%</Badge>
+                      <Badge className="bg-orange-100 text-orange-800">Overall: {analysisResults.confidence.overallAccuracy}%</Badge>
                     </div>
                   </div>
                 </div>

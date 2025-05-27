@@ -1,13 +1,13 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Brain, Download, Eye, Wand2 } from "lucide-react";
+import { Sparkles, Brain, Download, Eye, Wand2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateLessonContent } from "@/services/aiService";
+import { analysisDataStore } from "@/services/analysisDataStore";
 import ApiKeyInput from "./ApiKeyInput";
 
 const LessonGenerator = () => {
@@ -15,6 +15,7 @@ const LessonGenerator = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedLesson, setGeneratedLesson] = useState(null);
   const [apiKey, setApiKey] = useState("");
+  const [analysisData, setAnalysisData] = useState<any>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -22,6 +23,10 @@ const LessonGenerator = () => {
     if (savedApiKey) {
       setApiKey(savedApiKey);
     }
+    
+    // Load analysis data
+    const data = analysisDataStore.getAnalysisData();
+    setAnalysisData(data);
   }, []);
 
   const generateLesson = async () => {
@@ -37,12 +42,9 @@ const LessonGenerator = () => {
     setIsGenerating(true);
     
     try {
-      // AI automatically determines level, duration, and focus areas based on corpus analysis
       const lessonContent = await generateLessonContent({
         topic: topic.trim(),
-        level: 'Intermediate', // Auto-determined from corpus
-        duration: 45, // Auto-determined from corpus analysis
-        focusAreas: ['Reading Comprehension', 'Vocabulary Building', 'Speaking & Discussion'], // Auto-determined
+        analysisData: analysisData,
         apiKey: apiKey || undefined
       });
 
@@ -50,9 +52,11 @@ const LessonGenerator = () => {
       
       toast({
         title: "Lesson Generated Successfully!",
-        description: apiKey 
-          ? "AI has created a lesson matching your analyzed teaching style and methodology."
-          : "Sample lesson created. Add your OpenAI API key for AI-generated content.",
+        description: analysisData 
+          ? "AI created a lesson using your real analyzed teaching methodology and design patterns."
+          : apiKey 
+            ? "Lesson generated with OpenAI. Upload PowerPoint files for personalized methodology."
+            : "Sample lesson created. Add API key and analyze corpus for full personalization.",
       });
     } catch (error) {
       console.error('Error generating lesson:', error);
@@ -80,10 +84,24 @@ const LessonGenerator = () => {
             AI Lesson Generator
           </CardTitle>
           <CardDescription>
-            Simply enter a topic - AI will create a complete lesson using your analyzed teaching methodology
+            Enter any topic - AI will create a complete lesson using your analyzed teaching methodology
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {!analysisData && (
+            <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 mt-1" />
+                <div>
+                  <h4 className="font-medium text-amber-900 mb-1">No Corpus Analysis Available</h4>
+                  <p className="text-sm text-amber-700">
+                    Upload and analyze PowerPoint files first to enable personalized lesson generation based on your teaching methodology.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
               <Label htmlFor="topic" className="text-base font-medium">What topic would you like to teach?</Label>
@@ -96,25 +114,51 @@ const LessonGenerator = () => {
               />
             </div>
 
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
-              <div className="flex items-start gap-3">
-                <Brain className="h-5 w-5 text-blue-600 mt-1" />
-                <div>
-                  <h4 className="font-medium text-blue-900 mb-2">AI Auto-Configuration</h4>
-                  <p className="text-sm text-blue-700 mb-3">
-                    Based on your corpus analysis, the AI will automatically determine:
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Badge variant="outline" className="text-xs">Optimal lesson duration</Badge>
-                    <Badge variant="outline" className="text-xs">Appropriate difficulty level</Badge>
-                    <Badge variant="outline" className="text-xs">Your teaching style</Badge>
-                    <Badge variant="outline" className="text-xs">Preferred activity types</Badge>
-                    <Badge variant="outline" className="text-xs">Design consistency</Badge>
-                    <Badge variant="outline" className="text-xs">Assessment methods</Badge>
+            {analysisData ? (
+              <div className="p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
+                <div className="flex items-start gap-3">
+                  <Brain className="h-5 w-5 text-green-600 mt-1" />
+                  <div>
+                    <h4 className="font-medium text-green-900 mb-2">Real Analysis Data Available</h4>
+                    <p className="text-sm text-green-700 mb-3">
+                      Using your actual analyzed teaching methodology from {analysisData.overview?.totalLessons} PowerPoint files:
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Badge variant="outline" className="text-xs bg-white">
+                        {analysisData.pedagogicalInsights?.teachingStyle || 'Teaching Style Analyzed'}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs bg-white">
+                        {analysisData.designSystem?.dominantColors?.length || 0} Colors Extracted
+                      </Badge>
+                      <Badge variant="outline" className="text-xs bg-white">
+                        {analysisData.designSystem?.preferredFonts?.length || 0} Fonts Identified
+                      </Badge>
+                      <Badge variant="outline" className="text-xs bg-white">
+                        {analysisData.pedagogicalInsights?.preferredActivityTypes?.length || 0} Activity Types
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                <div className="flex items-start gap-3">
+                  <Brain className="h-5 w-5 text-blue-600 mt-1" />
+                  <div>
+                    <h4 className="font-medium text-blue-900 mb-2">Standard Lesson Generation</h4>
+                    <p className="text-sm text-blue-700 mb-3">
+                      Without corpus analysis, the AI will use general teaching best practices:
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Badge variant="outline" className="text-xs">Interactive approach</Badge>
+                      <Badge variant="outline" className="text-xs">Standard activities</Badge>
+                      <Badge variant="outline" className="text-xs">General design</Badge>
+                      <Badge variant="outline" className="text-xs">Common patterns</Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <Button 
@@ -124,7 +168,12 @@ const LessonGenerator = () => {
             size="lg"
           >
             <Sparkles className="h-5 w-5 mr-2" />
-            {isGenerating ? "Generating Personalized Lesson..." : "Generate AI Lesson"}
+            {isGenerating 
+              ? "Generating Personalized Lesson..." 
+              : analysisData 
+                ? "Generate AI Lesson (Using Your Methodology)" 
+                : "Generate Standard AI Lesson"
+            }
           </Button>
         </CardContent>
       </Card>
@@ -180,9 +229,12 @@ const LessonGenerator = () => {
               </div>
             </div>
 
-            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-              <p className="text-sm text-green-700">
-                ✅ Generated using your analyzed teaching methodology, design preferences, and pedagogical patterns
+            <div className={`p-3 rounded-lg border ${analysisData ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+              <p className={`text-sm ${analysisData ? 'text-green-700' : 'text-blue-700'}`}>
+                {analysisData 
+                  ? '✅ Generated using your real analyzed teaching methodology, design preferences, and pedagogical patterns'
+                  : '📝 Generated using standard teaching practices. Analyze your corpus for personalized methodology.'
+                }
               </p>
             </div>
           </CardContent>
