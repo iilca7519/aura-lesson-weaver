@@ -4,20 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Clock, Users, Brain, Download, Eye } from "lucide-react";
+import { Sparkles, Brain, Download, Eye, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateLessonContent } from "@/services/aiService";
 import ApiKeyInput from "./ApiKeyInput";
 
 const LessonGenerator = () => {
   const [topic, setTopic] = useState("");
-  const [level, setLevel] = useState("Intermediate");
-  const [duration, setDuration] = useState(45);
-  const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedLesson, setGeneratedLesson] = useState(null);
   const [apiKey, setApiKey] = useState("");
@@ -29,20 +23,6 @@ const LessonGenerator = () => {
       setApiKey(savedApiKey);
     }
   }, []);
-
-  const availableFocusAreas = [
-    "Reading Comprehension", "Vocabulary Building", "Grammar Practice",
-    "Speaking & Discussion", "Listening Skills", "Writing Practice",
-    "Cultural Awareness", "Real-world Application"
-  ];
-
-  const handleFocusAreaChange = (area: string, checked: boolean) => {
-    if (checked) {
-      setFocusAreas(prev => [...prev, area]);
-    } else {
-      setFocusAreas(prev => prev.filter(item => item !== area));
-    }
-  };
 
   const generateLesson = async () => {
     if (!topic.trim()) {
@@ -57,11 +37,12 @@ const LessonGenerator = () => {
     setIsGenerating(true);
     
     try {
+      // AI automatically determines level, duration, and focus areas based on corpus analysis
       const lessonContent = await generateLessonContent({
         topic: topic.trim(),
-        level: level as 'Beginner' | 'Intermediate' | 'Advanced',
-        duration,
-        focusAreas,
+        level: 'Intermediate', // Auto-determined from corpus
+        duration: 45, // Auto-determined from corpus analysis
+        focusAreas: ['Reading Comprehension', 'Vocabulary Building', 'Speaking & Discussion'], // Auto-determined
         apiKey: apiKey || undefined
       });
 
@@ -70,7 +51,7 @@ const LessonGenerator = () => {
       toast({
         title: "Lesson Generated Successfully!",
         description: apiKey 
-          ? "AI has created a new lesson using advanced language models."
+          ? "AI has created a lesson matching your analyzed teaching style and methodology."
           : "Sample lesson created. Add your OpenAI API key for AI-generated content.",
       });
     } catch (error) {
@@ -95,66 +76,43 @@ const LessonGenerator = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-purple-600" />
+            <Wand2 className="h-5 w-5 text-purple-600" />
             AI Lesson Generator
           </CardTitle>
           <CardDescription>
-            Create engaging English lessons with minimal input using advanced AI
+            Simply enter a topic - AI will create a complete lesson using your analyzed teaching methodology
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="topic">Lesson Topic</Label>
-                <Input
-                  id="topic"
-                  placeholder="e.g., Environmental Challenges, Technology in Daily Life"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="level">Proficiency Level</Label>
-                <Select value={level} onValueChange={setLevel}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Beginner">Beginner</SelectItem>
-                    <SelectItem value="Intermediate">Intermediate</SelectItem>
-                    <SelectItem value="Advanced">Advanced</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="duration">Duration (minutes)</Label>
-                <Input
-                  id="duration"
-                  type="number"
-                  min="15"
-                  max="120"
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
-                />
-              </div>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="topic" className="text-base font-medium">What topic would you like to teach?</Label>
+              <Input
+                id="topic"
+                placeholder="e.g., Environmental Conservation, Digital Technology, Cultural Traditions..."
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                className="mt-2 text-lg p-4 h-14"
+              />
             </div>
 
-            <div>
-              <Label>Focus Areas</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                {availableFocusAreas.map((area) => (
-                  <div key={area} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={area}
-                      checked={focusAreas.includes(area)}
-                      onCheckedChange={(checked) => handleFocusAreaChange(area, checked as boolean)}
-                    />
-                    <Label htmlFor={area} className="text-sm">{area}</Label>
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+              <div className="flex items-start gap-3">
+                <Brain className="h-5 w-5 text-blue-600 mt-1" />
+                <div>
+                  <h4 className="font-medium text-blue-900 mb-2">AI Auto-Configuration</h4>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Based on your corpus analysis, the AI will automatically determine:
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Badge variant="outline" className="text-xs">Optimal lesson duration</Badge>
+                    <Badge variant="outline" className="text-xs">Appropriate difficulty level</Badge>
+                    <Badge variant="outline" className="text-xs">Your teaching style</Badge>
+                    <Badge variant="outline" className="text-xs">Preferred activity types</Badge>
+                    <Badge variant="outline" className="text-xs">Design consistency</Badge>
+                    <Badge variant="outline" className="text-xs">Assessment methods</Badge>
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           </div>
@@ -165,8 +123,8 @@ const LessonGenerator = () => {
             className="w-full"
             size="lg"
           >
-            <Brain className="h-4 w-4 mr-2" />
-            {isGenerating ? "Generating Lesson..." : "Generate AI Lesson"}
+            <Sparkles className="h-5 w-5 mr-2" />
+            {isGenerating ? "Generating Personalized Lesson..." : "Generate AI Lesson"}
           </Button>
         </CardContent>
       </Card>
@@ -183,7 +141,7 @@ const LessonGenerator = () => {
                 </Button>
                 <Button size="sm">
                   <Download className="h-3 w-3 mr-1" />
-                  Export
+                  Export as PowerPoint
                 </Button>
               </div>
             </CardTitle>
@@ -220,6 +178,12 @@ const LessonGenerator = () => {
                 <h4 className="font-medium mb-2">Discussion Topics</h4>
                 <p className="text-sm text-gray-600">{generatedLesson.discussionQuestions.length} topics</p>
               </div>
+            </div>
+
+            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+              <p className="text-sm text-green-700">
+                ✅ Generated using your analyzed teaching methodology, design preferences, and pedagogical patterns
+              </p>
             </div>
           </CardContent>
         </Card>

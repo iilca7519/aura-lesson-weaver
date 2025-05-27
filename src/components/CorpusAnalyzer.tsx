@@ -2,16 +2,18 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, FileText, Brain, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, FileText, Brain, CheckCircle, AlertCircle, Palette, Layout, Users, Target } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { analyzePowerPointFile, aggregateAnalysis } from "@/services/pptAnalysisService";
 
 interface UploadedFile {
   name: string;
   size: number;
   type: string;
   id: string;
+  file: File;
 }
 
 const CorpusAnalyzer = () => {
@@ -19,6 +21,7 @@ const CorpusAnalyzer = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [analysisResults, setAnalysisResults] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -28,7 +31,8 @@ const CorpusAnalyzer = () => {
       name: file.name,
       size: file.size,
       type: file.type,
-      id: Math.random().toString(36).substr(2, 9)
+      id: Math.random().toString(36).substr(2, 9),
+      file: file
     }));
     
     setUploadedFiles(prev => [...prev, ...newFiles]);
@@ -53,36 +57,64 @@ const CorpusAnalyzer = () => {
     setAnalysisProgress(0);
 
     const analysisSteps = [
-      "Extracting text content from slides...",
-      "Performing semantic analysis...",
-      "Mapping lesson structures...",
-      "Analyzing visual design patterns...",
-      "Identifying pedagogical sequences...",
-      "Building knowledge graph...",
-      "Creating generative templates...",
-      "Finalizing AI knowledge base..."
+      "Extracting slides and content structure...",
+      "Analyzing layout patterns and positioning...",
+      "Examining color schemes and design elements...",
+      "Processing text formatting and typography...",
+      "Identifying image placement and styles...",
+      "Mapping pedagogical flow patterns...",
+      "Analyzing activity types and sequences...",
+      "Building comprehensive style profile...",
+      "Generating AI teaching methodology map..."
     ];
 
-    for (let i = 0; i < analysisSteps.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      setAnalysisProgress(((i + 1) / analysisSteps.length) * 100);
+    try {
+      const fileAnalyses = [];
+      
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const file = uploadedFiles[i];
+        
+        // Update progress for each file
+        for (let step = 0; step < analysisSteps.length; step++) {
+          const overallProgress = ((i * analysisSteps.length + step + 1) / (uploadedFiles.length * analysisSteps.length)) * 100;
+          setAnalysisProgress(overallProgress);
+          
+          toast({
+            title: `Analyzing ${file.name}`,
+            description: analysisSteps[step],
+          });
+          
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
+        
+        // Analyze each file
+        const analysis = await analyzePowerPointFile(file.file);
+        fileAnalyses.push(analysis);
+      }
+      
+      // Aggregate all analyses
+      const aggregatedResults = aggregateAnalysis(fileAnalyses);
+      setAnalysisResults(aggregatedResults);
+      
+      setIsAnalyzing(false);
+      setAnalysisComplete(true);
       
       toast({
-        title: "AI Analysis Progress",
-        description: analysisSteps[i],
+        title: "Deep Analysis Complete!",
+        description: "AI has comprehensively analyzed your teaching methodology, design patterns, and pedagogical approach.",
+      });
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setIsAnalyzing(false);
+      toast({
+        title: "Analysis Failed",
+        description: "There was an error analyzing your files. Please try again.",
+        variant: "destructive",
       });
     }
-
-    setIsAnalyzing(false);
-    setAnalysisComplete(true);
-    
-    toast({
-      title: "Corpus Analysis Complete!",
-      description: "AI has successfully learned your teaching methodology and style.",
-    });
   };
 
-  const formatFileSize = (bytes) => {
+  const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -96,10 +128,10 @@ const CorpusAnalyzer = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5 text-blue-600" />
-            Corpus Upload & Analysis
+            Deep Corpus Analysis
           </CardTitle>
           <CardDescription>
-            Upload your PowerPoint lessons for deep AI analysis of your teaching style and methodology
+            Upload PowerPoint lessons for comprehensive AI analysis of design, pedagogy, and style patterns
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -141,7 +173,7 @@ const CorpusAnalyzer = () => {
                       </div>
                     </div>
                     <Badge variant="outline" className="text-xs">
-                      Ready
+                      Ready for Analysis
                     </Badge>
                   </div>
                 ))}
@@ -152,13 +184,13 @@ const CorpusAnalyzer = () => {
           {isAnalyzing && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">AI Analysis in Progress...</span>
+                <span className="text-sm font-medium">Deep AI Analysis in Progress...</span>
                 <span className="text-sm text-gray-500">{Math.round(analysisProgress)}%</span>
               </div>
               <Progress value={analysisProgress} className="h-2" />
               <p className="text-sm text-gray-600">
-                The AI is deeply analyzing your lesson corpus to understand your pedagogical patterns, 
-                style preferences, and structural methodologies.
+                Performing comprehensive analysis of every design element, layout pattern, pedagogical sequence, 
+                color scheme, typography, image placement, and teaching methodology in your corpus.
               </p>
             </div>
           )}
@@ -170,62 +202,142 @@ const CorpusAnalyzer = () => {
               className="flex-1"
             >
               <Brain className="h-4 w-4 mr-2" />
-              {isAnalyzing ? "Analyzing..." : "Start AI Analysis"}
+              {isAnalyzing ? "Analyzing..." : "Start Deep Analysis"}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {analysisComplete && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              Analysis Complete
-            </CardTitle>
-            <CardDescription>
-              AI has successfully analyzed your corpus and built a comprehensive knowledge base
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-900">23</div>
-                <div className="text-sm text-blue-700">Lessons Analyzed</div>
+      {analysisComplete && analysisResults && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                Comprehensive Analysis Results
+              </CardTitle>
+              <CardDescription>
+                AI has completed deep analysis of your teaching corpus
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-900">{analysisResults.overview.totalLessons}</div>
+                  <div className="text-sm text-blue-700">Lessons Analyzed</div>
+                </div>
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-900">{analysisResults.overview.totalSlides}</div>
+                  <div className="text-sm text-green-700">Total Slides</div>
+                </div>
+                <div className="p-4 bg-purple-50 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-900">{analysisResults.overview.averageSlidesPerLesson}</div>
+                  <div className="text-sm text-purple-700">Avg Slides/Lesson</div>
+                </div>
+                <div className="p-4 bg-orange-50 rounded-lg">
+                  <div className="text-2xl font-bold text-orange-900">{analysisResults.confidence.overallAccuracy}%</div>
+                  <div className="text-sm text-orange-700">Analysis Confidence</div>
+                </div>
               </div>
-              <div className="p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-900">847</div>
-                <div className="text-sm text-green-700">Slides Processed</div>
-              </div>
-              <div className="p-4 bg-purple-50 rounded-lg">
-                <div className="text-2xl font-bold text-purple-900">15</div>
-                <div className="text-sm text-purple-700">Pattern Templates</div>
-              </div>
-              <div className="p-4 bg-orange-50 rounded-lg">
-                <div className="text-2xl font-bold text-orange-900">98%</div>
-                <div className="text-sm text-orange-700">Style Confidence</div>
-              </div>
-            </div>
 
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
-              <div className="flex items-start gap-3">
-                <Brain className="h-5 w-5 text-blue-600 mt-1" />
-                <div>
-                  <h4 className="font-medium text-blue-900 mb-2">AI Knowledge Base Ready</h4>
-                  <p className="text-sm text-blue-700 mb-3">
-                    The system has learned your teaching methodology and can now generate new lessons 
-                    that match your style, structure, and pedagogical approach.
-                  </p>
-                  <div className="flex gap-2">
-                    <Badge className="bg-blue-100 text-blue-800">Semantic Understanding</Badge>
-                    <Badge className="bg-purple-100 text-purple-800">Style Mapping</Badge>
-                    <Badge className="bg-green-100 text-green-800">Structure Recognition</Badge>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Palette className="h-5 w-5 text-purple-600" />
+                      Design System Analysis
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <h4 className="font-medium mb-2">Dominant Colors</h4>
+                      <div className="flex gap-2">
+                        {analysisResults.designSystem.dominantColors.map((color: string, index: number) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <div 
+                              className="w-4 h-4 rounded border"
+                              style={{ backgroundColor: color }}
+                            />
+                            <span className="text-xs text-gray-600">{color}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Typography Patterns</h4>
+                      <div className="flex gap-2">
+                        {analysisResults.designSystem.preferredFonts.map((font: string, index: number) => (
+                          <Badge key={index} variant="outline" className="text-xs">{font}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Layout Preferences</h4>
+                      <div className="space-y-1">
+                        {analysisResults.designSystem.commonLayouts.map((layout: any, index: number) => (
+                          <div key={index} className="flex justify-between text-sm">
+                            <span>{layout.layout}</span>
+                            <span className="text-gray-500">{layout.usage}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Target className="h-5 w-5 text-green-600" />
+                      Pedagogical Insights
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <h4 className="font-medium mb-2">Teaching Style</h4>
+                      <p className="text-sm text-gray-600">{analysisResults.pedagogicalInsights.teachingStyle}</p>
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Lesson Structure Pattern</h4>
+                      <div className="space-y-1">
+                        {analysisResults.pedagogicalInsights.lessonStructurePattern.map((pattern: string, index: number) => (
+                          <div key={index} className="text-xs text-gray-600">{pattern}</div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Preferred Activities</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {analysisResults.pedagogicalInsights.preferredActivityTypes.map((activity: string, index: number) => (
+                          <Badge key={index} variant="secondary" className="text-xs">{activity}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                <div className="flex items-start gap-3">
+                  <Brain className="h-5 w-5 text-blue-600 mt-1" />
+                  <div>
+                    <h4 className="font-medium text-blue-900 mb-2">AI Knowledge Base Status</h4>
+                    <p className="text-sm text-blue-700 mb-3">
+                      The system has analyzed every element: slide layouts, color schemes, typography, image placement, 
+                      logo positioning, text formatting, pedagogical sequences, activity types, and assessment methods.
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <Badge className="bg-blue-100 text-blue-800">Design Consistency: {analysisResults.confidence.designConsistency}%</Badge>
+                      <Badge className="bg-purple-100 text-purple-800">Style Recognition: {analysisResults.confidence.styleRecognition}%</Badge>
+                      <Badge className="bg-green-100 text-green-800">Pedagogy Alignment: {analysisResults.confidence.pedagogicalAlignment}%</Badge>
+                      <Badge className="bg-orange-100 text-orange-800">Overall Accuracy: {analysisResults.confidence.overallAccuracy}%</Badge>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

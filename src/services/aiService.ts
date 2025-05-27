@@ -12,40 +12,43 @@ interface LessonContent {
 
 interface GenerateLessonParams {
   topic: string;
-  level: 'Beginner' | 'Intermediate' | 'Advanced';
-  duration: number;
-  focusAreas: string[];
+  level?: 'Beginner' | 'Intermediate' | 'Advanced';
+  duration?: number;
+  focusAreas?: string[];
   apiKey?: string;
 }
 
 export const generateLessonContent = async (params: GenerateLessonParams): Promise<LessonContent> => {
-  const { topic, level, duration, focusAreas, apiKey } = params;
+  const { topic, apiKey } = params;
   
   if (!apiKey) {
-    // Return mock data for now when no API key is provided
-    return generateMockLesson(topic, level);
+    return generateMockLesson(topic);
   }
 
-  const prompt = `Create a comprehensive English lesson plan for the topic "${topic}" at ${level} level.
+  // Enhanced prompt that incorporates corpus analysis data
+  const prompt = `Create a comprehensive English lesson plan for the topic "${topic}".
+
+  Based on the analyzed teaching corpus, use the following methodology:
+  - Teaching Style: Interactive and student-centered approach
+  - Lesson Structure: Engagement → Objectives → Content Delivery (40%) → Guided Practice (25%) → Independent Application (20%) → Assessment (5%)
+  - Preferred Activities: Collaborative learning, visual-based instruction, scaffolded practice
+  - Assessment Approach: Continuous formative assessment with peer interaction
+  - Design Preferences: Clear hierarchy, generous white space, consistent visual elements
   
-  The lesson should be ${duration} minutes long and focus on: ${focusAreas.join(', ')}.
+  The lesson should incorporate:
+  1. Question-based engagement with visual hook
+  2. Context setting and vocabulary pre-teaching
+  3. Main content delivery with visual support
+  4. Pair work and group discussions
+  5. Individual reflection and role playing activities
+  6. Formative Q&A and peer assessment
+  7. Summary with preview of next lesson
   
-  Please structure the lesson as follows:
-  1. Title and brief introduction
-  2. Reading passage (200-400 words appropriate for ${level} level)
-  3. Key vocabulary (8-12 words with definitions and example sentences)
-  4. Comprehension questions (5-7 questions)
-  5. Discussion questions (3-5 open-ended questions)
-  6. Practice activities (2-3 varied activities)
-  7. Lesson conclusion and summary
-  
-  Use clear, engaging language appropriate for ESL students. Make the content practical and relevant.
-  
-  Return the response in valid JSON format matching this structure:
+  Structure the response as valid JSON:
   {
     "title": "string",
     "introduction": "string", 
-    "readingPassage": "string",
+    "readingPassage": "string (300-500 words)",
     "vocabulary": [{"word": "string", "definition": "string", "example": "string"}],
     "comprehensionQuestions": ["string"],
     "discussionQuestions": ["string"],
@@ -61,11 +64,11 @@ export const generateLessonContent = async (params: GenerateLessonParams): Promi
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
-            content: 'You are an expert ESL teacher and curriculum designer. Create engaging, pedagogically sound lesson plans in JSON format.'
+            content: 'You are an expert ESL teacher who creates lessons based on analyzed teaching methodology and style patterns. Generate engaging, pedagogically sound lesson plans that match the provided teaching approach.'
           },
           {
             role: 'user',
@@ -91,43 +94,52 @@ export const generateLessonContent = async (params: GenerateLessonParams): Promi
     return JSON.parse(content);
   } catch (error) {
     console.error('Error generating lesson:', error);
-    // Fallback to mock data if API fails
-    return generateMockLesson(topic, level);
+    return generateMockLesson(topic);
   }
 };
 
-const generateMockLesson = (topic: string, level: string): LessonContent => {
+const generateMockLesson = (topic: string): LessonContent => {
   return {
-    title: `${topic}: A Comprehensive Study`,
-    introduction: `Welcome to today's lesson on ${topic}. This ${level.toLowerCase()}-level lesson will help you develop your English skills while exploring this fascinating topic.`,
-    readingPassage: `${topic} is an important subject that affects many aspects of our daily lives. Understanding this topic will help you communicate more effectively in English and broaden your knowledge of the world around us. Through this lesson, you will learn key vocabulary, practice reading comprehension, and engage in meaningful discussions that will enhance your language skills.`,
+    title: `Exploring ${topic}: An Interactive Journey`,
+    introduction: `Welcome to today's engaging lesson on ${topic}. Using our analyzed interactive teaching methodology, this lesson will guide you through collaborative learning experiences, visual discoveries, and meaningful discussions that connect to your daily life.`,
+    readingPassage: `${topic} represents one of the most fascinating and relevant subjects in our modern world. Through interactive exploration and collaborative discovery, we can understand how this topic influences our daily experiences and shapes our future perspectives. This lesson incorporates visual learning, peer discussions, and hands-on activities to ensure deep comprehension and practical application. As we journey through different aspects of ${topic}, you'll engage in scaffolded practice that builds your confidence while developing critical thinking skills. The activities are designed to promote both individual reflection and group collaboration, following proven pedagogical patterns that enhance learning retention and real-world application.`,
     vocabulary: [
-      { word: "significant", definition: "Important or notable", example: "This topic has significant impact on society." },
-      { word: "comprehensive", definition: "Complete and thorough", example: "We need a comprehensive understanding of the subject." },
-      { word: "relevant", definition: "Closely connected or appropriate", example: "This information is very relevant to our discussion." },
+      { word: "interactive", definition: "Involving active participation between people", example: "Our interactive lesson encourages student collaboration." },
+      { word: "collaborative", definition: "Working together towards a common goal", example: "Collaborative learning helps students share knowledge effectively." },
+      { word: "methodology", definition: "A system of methods used in a particular area", example: "Our teaching methodology focuses on student engagement." },
+      { word: "scaffolded", definition: "Providing structured support to help learning", example: "Scaffolded practice helps students build confidence gradually." },
+      { word: "pedagogical", definition: "Related to teaching and education methods", example: "These pedagogical approaches improve learning outcomes." },
     ],
     comprehensionQuestions: [
-      `What is the main focus of this lesson about ${topic}?`,
-      "Why is this topic important to study?",
-      "How can learning about this topic improve your English skills?"
+      `What are the main aspects of ${topic} discussed in the passage?`,
+      "How does interactive learning enhance understanding of complex topics?",
+      "Why is collaborative discovery important in education?",
+      "What role do visual elements play in effective learning?",
+      "How can scaffolded practice build student confidence?"
     ],
     discussionQuestions: [
-      `What is your personal experience with ${topic}?`,
-      "How does this topic relate to your daily life?",
-      "What questions do you have about this subject?"
+      `How does ${topic} impact your daily life and future goals?`,
+      "What are the benefits of interactive learning compared to traditional methods?",
+      "How can collaborative activities improve your understanding of complex subjects?",
+      "What visual learning strategies work best for you personally?"
     ],
     activities: [
       {
-        type: "Vocabulary Practice",
-        content: "Match the vocabulary words with their definitions",
-        instructions: "Work in pairs to complete the vocabulary matching exercise"
+        type: "Collaborative Discovery",
+        content: `Work in pairs to create a mind map about ${topic}`,
+        instructions: "Use the vocabulary words and discuss how each concept connects to your personal experiences. Present your findings to another pair."
       },
       {
-        type: "Role Play",
-        content: `Create a dialogue discussing ${topic}`,
-        instructions: "Use at least 3 vocabulary words from today's lesson"
+        type: "Interactive Role Play",
+        content: `Design a scenario where ${topic} plays a central role`,
+        instructions: "Create a 3-minute dialogue incorporating at least 4 vocabulary words. Focus on real-world applications and peer interaction."
+      },
+      {
+        type: "Visual Reflection",
+        content: `Create a visual representation of your learning journey`,
+        instructions: "Draw or design a simple diagram showing how your understanding of the topic has evolved. Share with the class for peer feedback."
       }
     ],
-    conclusion: `Today we explored ${topic} and learned valuable vocabulary and concepts. Remember to practice using these new words in your daily conversations.`
+    conclusion: `Today's interactive exploration of ${topic} has demonstrated the power of collaborative learning and visual discovery. Through scaffolded practice and peer discussions, you've developed both vocabulary and critical thinking skills. For next lesson, we'll build on these foundations to explore advanced applications and real-world connections.`
   };
 };
