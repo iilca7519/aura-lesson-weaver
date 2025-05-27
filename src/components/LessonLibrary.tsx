@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const LessonLibrary = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterLevel, setFilterLevel] = useState("");
-  const [filterType, setFilterType] = useState("");
+  const [filterLevel, setFilterLevel] = useState("all");
+  const [filterType, setFilterType] = useState("all");
 
   // Sample lesson data
   const lessons = [
@@ -67,8 +67,8 @@ const LessonLibrary = () => {
   const filteredLessons = lessons.filter(lesson => {
     const matchesSearch = lesson.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          lesson.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLevel = !filterLevel || lesson.level === filterLevel;
-    const matchesType = !filterType || lesson.type === filterType;
+    const matchesLevel = filterLevel === "all" || lesson.level === filterLevel;
+    const matchesType = filterType === "all" || lesson.type === filterType;
     
     return matchesSearch && matchesLevel && matchesType;
   });
@@ -119,7 +119,7 @@ const LessonLibrary = () => {
                   <SelectValue placeholder="All Levels" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Levels</SelectItem>
+                  <SelectItem value="all">All Levels</SelectItem>
                   <SelectItem value="Beginner">Beginner</SelectItem>
                   <SelectItem value="Intermediate">Intermediate</SelectItem>
                   <SelectItem value="Advanced">Advanced</SelectItem>
@@ -131,7 +131,7 @@ const LessonLibrary = () => {
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="AI Generated">AI Generated</SelectItem>
                   <SelectItem value="Original">Original</SelectItem>
                 </SelectContent>
