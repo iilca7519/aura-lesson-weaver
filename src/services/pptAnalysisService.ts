@@ -224,107 +224,69 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   let slideTitle = '';
   
   console.log(`=== ANALYZING SLIDE ${slideNumber} ===`);
+  console.log('Raw XML preview:', slideXml.substring(0, 500));
   
-  // Namespace resolver for PowerPoint XML
-  const namespaceResolver = (prefix: string) => {
-    const namespaces = {
-      'p': 'http://schemas.openxmlformats.org/presentationml/2006/main',
-      'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
-      'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
-    };
-    return namespaces[prefix] || null;
-  };
-  
-  // Strategy 1: Use XPath with proper namespace resolution for title placeholders
-  try {
-    const titleXPath = "//p:sp[p:nvSpPr/p:nvPr/p:ph[@type='title']]/p:txBody//a:t";
-    const titleResult = doc.evaluate(
-      titleXPath,
-      doc,
-      namespaceResolver,
-      XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
-      null
-    );
+  // Updated approach based on your specific PowerPoint file structure
+  function extractSlideTitle(slideXml: Document): string {
+    // Strategy 1: Find title by placeholder type (most reliable)
+    const allShapes = slideXml.querySelectorAll('p\\:sp, sp');
+    let titleElement = null;
     
-    const titleTexts = [];
-    for (let i = 0; i < titleResult.snapshotLength; i++) {
-      const textNode = titleResult.snapshotItem(i);
-      if (textNode && textNode.textContent?.trim()) {
-        titleTexts.push(textNode.textContent.trim());
+    console.log(`Found ${allShapes.length} shapes in slide ${slideNumber}`);
+    
+    // Look for shape that contains a placeholder with type="title"
+    for (const shape of allShapes) {
+      const placeholder = shape.querySelector('p\\:nvPr p\\:ph[type="title"], nvPr ph[type="title"]');
+      if (placeholder) {
+        console.log(`Found title placeholder in slide ${slideNumber}`);
+        titleElement = shape;
+        break;
       }
     }
     
-    if (titleTexts.length > 0) {
-      slideTitle = titleTexts.join(' ').trim();
-      console.log(`Found title via XPath title placeholder: "${slideTitle}"`);
-    }
-  } catch (error) {
-    console.log('XPath with namespaces failed, trying alternative approach');
-  }
-  
-  // Strategy 2: Fallback - Look for title by shape name
-  if (!slideTitle) {
-    try {
-      const titleByNameXPath = "//p:sp[p:nvSpPr/p:cNvPr[starts-with(@name,'Title')]]/p:txBody//a:t";
-      const titleResult = doc.evaluate(
-        titleByNameXPath,
-        doc,
-        namespaceResolver,
-        XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
-        null
-      );
-      
-      const titleTexts = [];
-      for (let i = 0; i < titleResult.snapshotLength; i++) {
-        const textNode = titleResult.snapshotItem(i);
-        if (textNode && textNode.textContent?.trim()) {
-          titleTexts.push(textNode.textContent.trim());
+    // Strategy 2: Find by name attribute containing "Title"
+    if (!titleElement) {
+      console.log(`No title placeholder found, trying name attribute for slide ${slideNumber}`);
+      for (const shape of allShapes) {
+        const nameElement = shape.querySelector('p\\:cNvPr, cNvPr');
+        const nameAttr = nameElement?.getAttribute('name');
+        if (nameAttr && nameAttr.includes('Title')) {
+          console.log(`Found title by name "${nameAttr}" in slide ${slideNumber}`);
+          titleElement = shape;
+          break;
         }
       }
+    }
+    
+    // Extract text if title element was found
+    if (titleElement) {
+      console.log(`Extracting text from title element in slide ${slideNumber}`);
+      const textElements = titleElement.querySelectorAll('p\\:txBody a\\:p a\\:r a\\:t, txBody p r t, p\\:txBody a\\:t, txBody t');
+      const titleTexts = Array.from(textElements).map(el => el.textContent?.trim()).filter(Boolean);
       
       if (titleTexts.length > 0) {
-        slideTitle = titleTexts.join(' ').trim();
-        console.log(`Found title via XPath name pattern: "${slideTitle}"`);
+        const fullTitle = titleTexts.join(' ').trim();
+        console.log(`Successfully extracted title: "${fullTitle}" from slide ${slideNumber}`);
+        return fullTitle;
       }
-    } catch (error) {
-      console.log('XPath title by name failed, using DOM approach');
     }
-  }
-  
-  // Strategy 3: DOM-based fallback (original approach but improved)
-  if (!slideTitle) {
-    // Look for explicit title shapes (PowerPoint standard)
-    const titlePlaceholders = doc.querySelectorAll('p\\:ph[type="title"], p\\:ph[type="ctrTitle"], ph[type="title"], ph[type="ctrTitle"]');
     
-    if (titlePlaceholders.length > 0) {
-      for (const placeholder of titlePlaceholders) {
-        const parentShape = placeholder.closest('p\\:sp') || placeholder.closest('sp');
-        if (parentShape) {
-          const textBody = parentShape.querySelector('p\\:txBody, txBody');
-          if (textBody) {
-            const textElements = textBody.querySelectorAll('a\\:t, t');
-            const titleTexts = Array.from(textElements)
-              .map(el => el.textContent?.trim())
-              .filter(Boolean);
-            if (titleTexts.length > 0) {
-              slideTitle = titleTexts.join(' ').trim();
-              console.log(`Found title via DOM title placeholder: "${slideTitle}"`);
-              break;
-            }
-          }
-        }
-      }
-    }
+    console.log(`No title found for slide ${slideNumber}, using fallback`);
+    return '';
   }
   
-  // Strategy 4: Final fallback - get first significant text if still no title
+  // Use the new extraction function
+  slideTitle = extractSlideTitle(doc);
+  
+  // Fallback: get first significant text if still no title
   if (!slideTitle) {
+    console.log(`Using fallback text extraction for slide ${slideNumber}`);
     const allTextElements = doc.querySelectorAll('a\\:t, t');
     for (const textEl of allTextElements) {
       const text = textEl.textContent?.trim();
       if (text && text.length > 2 && text.length < 100) {
         slideTitle = text;
-        console.log(`Found title via fallback: "${slideTitle}"`);
+        console.log(`Found title via fallback: "${slideTitle}" for slide ${slideNumber}`);
         break;
       }
     }
