@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { generateLessonContent } from "@/services/aiService";
 import { analysisDataStore } from "@/services/analysisDataStore";
 import ApiKeyInput from "./ApiKeyInput";
+import LessonGenerationSettings from "./LessonGenerationSettings";
 
 const LessonGenerator = () => {
   const [topic, setTopic] = useState("");
@@ -16,6 +18,7 @@ const LessonGenerator = () => {
   const [generatedLesson, setGeneratedLesson] = useState(null);
   const [apiKey, setApiKey] = useState("");
   const [analysisData, setAnalysisData] = useState<any>(null);
+  const [lessonSettings, setLessonSettings] = useState<any>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -45,6 +48,7 @@ const LessonGenerator = () => {
       const lessonContent = await generateLessonContent({
         topic: topic.trim(),
         analysisData: analysisData,
+        lessonSettings: lessonSettings,
         apiKey: apiKey || undefined
       });
 
@@ -53,7 +57,7 @@ const LessonGenerator = () => {
       toast({
         title: "Lesson Generated Successfully!",
         description: analysisData 
-          ? "AI created a lesson using your real analyzed teaching methodology and design patterns."
+          ? "AI created a personalized lesson matching your teaching style and preferences."
           : apiKey 
             ? "Lesson generated with OpenAI. Upload PowerPoint files for personalized methodology."
             : "Sample lesson created. Add API key and analyze corpus for full personalization.",
@@ -84,7 +88,7 @@ const LessonGenerator = () => {
             AI Lesson Generator
           </CardTitle>
           <CardDescription>
-            Enter any topic - AI will create a complete lesson using your analyzed teaching methodology
+            Create lessons that match your analyzed teaching methodology and style
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -93,9 +97,9 @@ const LessonGenerator = () => {
               <div className="flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-amber-600 mt-1" />
                 <div>
-                  <h4 className="font-medium text-amber-900 mb-1">No Corpus Analysis Available</h4>
+                  <h4 className="font-medium text-amber-900 mb-1">No Analysis Data Available</h4>
                   <p className="text-sm text-amber-700">
-                    Upload and analyze PowerPoint files first to enable personalized lesson generation based on your teaching methodology.
+                    Upload and analyze PowerPoint files to enable personalized lesson generation that matches your exact teaching methodology.
                   </p>
                 </div>
               </div>
@@ -107,53 +111,35 @@ const LessonGenerator = () => {
               <Label htmlFor="topic" className="text-base font-medium">What topic would you like to teach?</Label>
               <Input
                 id="topic"
-                placeholder="e.g., Environmental Conservation, Digital Technology, Cultural Traditions..."
+                placeholder="e.g., Climate Change, Digital Communication, Cultural Diversity..."
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 className="mt-2 text-lg p-4 h-14"
               />
             </div>
 
-            {analysisData ? (
+            {analysisData && (
               <div className="p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
                 <div className="flex items-start gap-3">
                   <Brain className="h-5 w-5 text-green-600 mt-1" />
                   <div>
-                    <h4 className="font-medium text-green-900 mb-2">Real Analysis Data Available</h4>
+                    <h4 className="font-medium text-green-900 mb-2">Using Your Teaching Methodology</h4>
                     <p className="text-sm text-green-700 mb-3">
-                      Using your actual analyzed teaching methodology from {analysisData.overview?.totalLessons} PowerPoint files:
+                      AI will generate lessons using patterns from your {analysisData.overview?.totalLessons} analyzed files:
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <Badge variant="outline" className="text-xs bg-white">
                         {analysisData.pedagogicalInsights?.teachingStyle || 'Teaching Style Analyzed'}
                       </Badge>
                       <Badge variant="outline" className="text-xs bg-white">
-                        {analysisData.designSystem?.dominantColors?.length || 0} Colors Extracted
+                        {analysisData.designSystem?.dominantColors?.length || 0} Color Palette
                       </Badge>
                       <Badge variant="outline" className="text-xs bg-white">
-                        {analysisData.designSystem?.preferredFonts?.length || 0} Fonts Identified
+                        {analysisData.designSystem?.preferredFonts?.length || 0} Font Preferences
                       </Badge>
                       <Badge variant="outline" className="text-xs bg-white">
-                        {analysisData.pedagogicalInsights?.preferredActivityTypes?.length || 0} Activity Types
+                        {analysisData.pedagogicalInsights?.preferredActivityTypes?.length || 0} Activity Patterns
                       </Badge>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
-                <div className="flex items-start gap-3">
-                  <Brain className="h-5 w-5 text-blue-600 mt-1" />
-                  <div>
-                    <h4 className="font-medium text-blue-900 mb-2">Standard Lesson Generation</h4>
-                    <p className="text-sm text-blue-700 mb-3">
-                      Without corpus analysis, the AI will use general teaching best practices:
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Badge variant="outline" className="text-xs">Interactive approach</Badge>
-                      <Badge variant="outline" className="text-xs">Standard activities</Badge>
-                      <Badge variant="outline" className="text-xs">General design</Badge>
-                      <Badge variant="outline" className="text-xs">Common patterns</Badge>
                     </div>
                   </div>
                 </div>
@@ -171,69 +157,103 @@ const LessonGenerator = () => {
             {isGenerating 
               ? "Generating Personalized Lesson..." 
               : analysisData 
-                ? "Generate AI Lesson (Using Your Methodology)" 
-                : "Generate Standard AI Lesson"
+                ? "Generate Lesson (Your Style)" 
+                : "Generate Standard Lesson"
             }
           </Button>
         </CardContent>
       </Card>
 
+      <LessonGenerationSettings 
+        onSettingsChange={setLessonSettings}
+        analysisData={analysisData}
+      />
+
       {generatedLesson && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Generated Lesson Preview</span>
+              <span>Generated Lesson: {generatedLesson.title}</span>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline">
                   <Eye className="h-3 w-3 mr-1" />
-                  Full Preview
+                  Preview
                 </Button>
                 <Button size="sm">
                   <Download className="h-3 w-3 mr-1" />
-                  Export as PowerPoint
+                  Export PowerPoint
                 </Button>
               </div>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <h3 className="font-semibold text-lg mb-2">{generatedLesson.title}</h3>
-              <p className="text-gray-600">{generatedLesson.introduction}</p>
+          <CardContent className="space-y-6">
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-medium mb-2">Lesson Overview</h4>
+              <p className="text-sm text-gray-700">{generatedLesson.introduction}</p>
             </div>
             
-            <div>
-              <h4 className="font-medium mb-2">Reading Passage</h4>
-              <p className="text-sm bg-gray-50 p-3 rounded">{generatedLesson.readingPassage}</p>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-medium text-sm mb-2">📖 Reading Passage</h4>
+                <p className="text-xs text-gray-600 mb-2">
+                  {generatedLesson.readingPassage.split(' ').length} words
+                </p>
+                <p className="text-sm line-clamp-3">{generatedLesson.readingPassage}</p>
+              </div>
 
-            <div>
-              <h4 className="font-medium mb-2">Key Vocabulary ({generatedLesson.vocabulary.length} words)</h4>
-              <div className="flex flex-wrap gap-2">
-                {generatedLesson.vocabulary.slice(0, 6).map((vocab, index) => (
-                  <Badge key={index} variant="outline">{vocab.word}</Badge>
-                ))}
-                {generatedLesson.vocabulary.length > 6 && (
-                  <Badge variant="outline">+{generatedLesson.vocabulary.length - 6} more</Badge>
-                )}
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-medium text-sm mb-2">📝 Vocabulary ({generatedLesson.vocabulary.length})</h4>
+                <div className="space-y-2">
+                  {generatedLesson.vocabulary.slice(0, 3).map((vocab, index) => (
+                    <div key={index} className="text-xs">
+                      <span className="font-medium">{vocab.word}</span>
+                      <p className="text-gray-600 truncate">{vocab.definition}</p>
+                    </div>
+                  ))}
+                  {generatedLesson.vocabulary.length > 3 && (
+                    <p className="text-xs text-gray-500">+{generatedLesson.vocabulary.length - 3} more</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-medium text-sm mb-2">🎯 Activities ({generatedLesson.activities.length})</h4>
+                <div className="space-y-2">
+                  {generatedLesson.activities.slice(0, 2).map((activity, index) => (
+                    <div key={index} className="text-xs">
+                      <span className="font-medium">{activity.type}</span>
+                      <p className="text-gray-600 truncate">{activity.content}</p>
+                    </div>
+                  ))}
+                  {generatedLesson.activities.length > 2 && (
+                    <p className="text-xs text-gray-500">+{generatedLesson.activities.length - 2} more</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-medium text-sm mb-2">❓ Comprehension</h4>
+                <p className="text-xs text-gray-600">{generatedLesson.comprehensionQuestions.length} questions</p>
+                <p className="text-sm mt-2 line-clamp-2">{generatedLesson.comprehensionQuestions[0]}</p>
+              </div>
+
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-medium text-sm mb-2">💬 Discussion</h4>
+                <p className="text-xs text-gray-600">{generatedLesson.discussionQuestions.length} topics</p>
+                <p className="text-sm mt-2 line-clamp-2">{generatedLesson.discussionQuestions[0]}</p>
+              </div>
+
+              <div className="p-4 border rounded-lg">
+                <h4 className="font-medium text-sm mb-2">🎯 Conclusion</h4>
+                <p className="text-sm line-clamp-3">{generatedLesson.conclusion}</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <h4 className="font-medium mb-2">Comprehension Questions</h4>
-                <p className="text-sm text-gray-600">{generatedLesson.comprehensionQuestions.length} questions</p>
-              </div>
-              <div>
-                <h4 className="font-medium mb-2">Discussion Topics</h4>
-                <p className="text-sm text-gray-600">{generatedLesson.discussionQuestions.length} topics</p>
-              </div>
-            </div>
-
-            <div className={`p-3 rounded-lg border ${analysisData ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+            <div className={`p-4 rounded-lg border ${analysisData ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
               <p className={`text-sm ${analysisData ? 'text-green-700' : 'text-blue-700'}`}>
                 {analysisData 
-                  ? '✅ Generated using your real analyzed teaching methodology, design preferences, and pedagogical patterns'
-                  : '📝 Generated using standard teaching practices. Analyze your corpus for personalized methodology.'
+                  ? '✅ This lesson was generated using your analyzed teaching methodology, style preferences, and pedagogical patterns'
+                  : '📝 This lesson uses standard teaching practices. Upload and analyze your PowerPoint files to enable personalized generation'
                 }
               </p>
             </div>

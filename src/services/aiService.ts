@@ -12,61 +12,75 @@ interface LessonContent {
 
 interface GenerateLessonParams {
   topic: string;
-  analysisData?: any; // Real analysis data from corpus
+  analysisData?: any;
+  lessonSettings?: any;
   apiKey?: string;
 }
 
 export const generateLessonContent = async (params: GenerateLessonParams): Promise<LessonContent> => {
-  const { topic, analysisData, apiKey } = params;
+  const { topic, analysisData, lessonSettings, apiKey } = params;
   
   if (!apiKey) {
-    return generateMockLesson(topic, analysisData);
+    return generateMockLesson(topic, analysisData, lessonSettings);
   }
 
-  // Enhanced prompt that incorporates real corpus analysis data
+  // Build comprehensive prompt using analysis data and settings
   const analysisPrompt = analysisData ? `
-  Based on comprehensive analysis of the user's PowerPoint corpus, use the following REAL methodology data:
+  ANALYZED TEACHING METHODOLOGY (Use this as your foundation):
   
-  DESIGN SYSTEM:
-  - Primary Colors: ${analysisData.designSystem?.dominantColors?.join(', ') || 'Not analyzed'}
-  - Preferred Fonts: ${analysisData.designSystem?.preferredFonts?.join(', ') || 'Not analyzed'}
-  - Common Layouts: ${analysisData.designSystem?.commonLayouts?.map(l => l.layout).join(', ') || 'Not analyzed'}
-  
-  PEDAGOGICAL PATTERNS:
-  - Teaching Style: ${analysisData.pedagogicalInsights?.teachingStyle || 'Interactive approach'}
+  PEDAGOGICAL STYLE:
+  - Teaching Approach: ${analysisData.pedagogicalInsights?.teachingStyle || 'Interactive'}
   - Preferred Activities: ${analysisData.pedagogicalInsights?.preferredActivityTypes?.join(', ') || 'Mixed activities'}
-  - Assessment Approach: ${analysisData.pedagogicalInsights?.assessmentApproach || 'Formative assessment'}
+  - Assessment Method: ${analysisData.pedagogicalInsights?.assessmentApproach || 'Formative'}
   - Lesson Structure: ${analysisData.pedagogicalInsights?.lessonStructurePattern?.join(' → ') || 'Standard flow'}
+  
+  DESIGN PREFERENCES:
+  - Color Palette: ${analysisData.designSystem?.dominantColors?.join(', ') || 'Professional colors'}
+  - Typography: ${analysisData.designSystem?.preferredFonts?.join(', ') || 'Clear fonts'}
+  - Layout Style: ${analysisData.designSystem?.commonLayouts?.map(l => l.layout).join(', ') || 'Standard layouts'}
   
   VISUAL PATTERNS:
   - Image Usage: ${analysisData.visualPatterns?.imageUsage || 'Moderate visual support'}
   - Text Formatting: ${analysisData.visualPatterns?.textFormatting || 'Clear hierarchy'}
-  - Spacing Pattern: ${analysisData.visualPatterns?.spacingPattern || 'Balanced layout'}
-  
-  CONFIDENCE METRICS:
-  - Design Consistency: ${analysisData.confidence?.designConsistency || 0}%
-  - Pedagogical Alignment: ${analysisData.confidence?.pedagogicalAlignment || 0}%
-  - Style Recognition: ${analysisData.confidence?.styleRecognition || 0}%
-  ` : `
-  No corpus analysis available. Use general best practices for English language teaching.
-  `;
+  - Content Organization: ${analysisData.visualPatterns?.spacingPattern || 'Balanced layout'}
+  ` : 'No corpus analysis available. Use general ESL best practices.';
 
-  const prompt = `Create a comprehensive English lesson plan for the topic "${topic}".
+  const settingsPrompt = lessonSettings ? `
+  LESSON CUSTOMIZATION REQUIREMENTS:
+  - Target Audience: ${lessonSettings.targetAudience || 'intermediate'}
+  - Duration: ${lessonSettings.lessonDuration || 45} minutes
+  - Difficulty: ${lessonSettings.difficultyLevel || 'intermediate'}
+  - Focus Areas: ${lessonSettings.focusAreas?.join(', ') || 'reading, vocabulary'}
+  - Vocabulary Count: ${lessonSettings.vocabularyCount || 8} words
+  - Reading Length: ${lessonSettings.readingLength || 'medium'}
+  - Interaction Style: ${lessonSettings.interactionStyle || 'collaborative'}
+  - Activity Intensity: Level ${lessonSettings.activityIntensity || 3}/5
+  - Assessment: ${lessonSettings.assessmentStyle || 'formative'}
+  - Include Visuals: ${lessonSettings.includeVisuals ? 'Yes' : 'No'}
+  ` : 'Use standard lesson parameters.';
+
+  const prompt = `Create a comprehensive English lesson plan for "${topic}".
 
   ${analysisPrompt}
   
-  IMPORTANT: Match the analyzed teaching methodology exactly. Use the specific activity types, assessment methods, and lesson structure patterns identified from the corpus analysis.
+  ${settingsPrompt}
   
-  Structure the response as valid JSON:
+  CRITICAL INSTRUCTIONS:
+  1. MATCH the analyzed teaching methodology exactly - use the same activity types, progression, and style
+  2. APPLY the customization settings precisely - respect duration, difficulty, and focus areas
+  3. MAINTAIN consistency with the user's established pedagogical patterns
+  4. CREATE content that feels authentic to the user's teaching voice and approach
+  
+  Generate lesson content as valid JSON:
   {
     "title": "string",
-    "introduction": "string", 
-    "readingPassage": "string (300-500 words)",
-    "vocabulary": [{"word": "string", "definition": "string", "example": "string"}],
-    "comprehensionQuestions": ["string"],
-    "discussionQuestions": ["string"],
-    "activities": [{"type": "string", "content": "string", "instructions": "string"}],
-    "conclusion": "string"
+    "introduction": "string (match the user's introduction style)", 
+    "readingPassage": "string (${lessonSettings?.readingLength || 'medium'} length)",
+    "vocabulary": [{"word": "string", "definition": "string", "example": "string"}] (exactly ${lessonSettings?.vocabularyCount || 8} words),
+    "comprehensionQuestions": ["string"] (${lessonSettings?.difficultyLevel || 'intermediate'} level),
+    "discussionQuestions": ["string"] (match ${lessonSettings?.interactionStyle || 'collaborative'} style),
+    "activities": [{"type": "string", "content": "string", "instructions": "string"}] (intensity level ${lessonSettings?.activityIntensity || 3}/5),
+    "conclusion": "string (match user's conclusion style)"
   }`;
 
   try {
@@ -81,7 +95,7 @@ export const generateLessonContent = async (params: GenerateLessonParams): Promi
         messages: [
           {
             role: 'system',
-            content: 'You are an expert ESL teacher who creates lessons based on real analyzed teaching methodology and style patterns. Generate engaging, pedagogically sound lesson plans that precisely match the provided corpus analysis data.'
+            content: 'You are an expert ESL teacher who creates lessons that perfectly match analyzed teaching methodologies. Your goal is to generate content that feels like it was created by the original teacher, maintaining their style, approach, and preferences while adapting to new topics.'
           },
           {
             role: 'user',
@@ -107,42 +121,60 @@ export const generateLessonContent = async (params: GenerateLessonParams): Promi
     return JSON.parse(content);
   } catch (error) {
     console.error('Error generating lesson:', error);
-    return generateMockLesson(topic, analysisData);
+    return generateMockLesson(topic, analysisData, lessonSettings);
   }
 };
 
-const generateMockLesson = (topic: string, analysisData?: any): LessonContent => {
-  const activityTypes = analysisData?.pedagogicalInsights?.preferredActivityTypes || ['Interactive Learning', 'Collaborative Work'];
-  const teachingStyle = analysisData?.pedagogicalInsights?.teachingStyle || 'Interactive and engaging approach';
+const generateMockLesson = (topic: string, analysisData?: any, settings?: any): LessonContent => {
+  const duration = settings?.lessonDuration || 45;
+  const vocabCount = settings?.vocabularyCount || 8;
+  const difficulty = settings?.difficultyLevel || 'intermediate';
+  const interactionStyle = settings?.interactionStyle || 'collaborative';
+  const activityTypes = analysisData?.pedagogicalInsights?.preferredActivityTypes || ['Interactive Learning', 'Group Discussion'];
+  const teachingStyle = analysisData?.pedagogicalInsights?.teachingStyle || 'Interactive and engaging';
+  
+  const readingPassages = {
+    short: `${topic} is a fascinating subject that connects to our daily lives in many ways. Through ${teachingStyle.toLowerCase()}, we can explore this topic effectively. This lesson incorporates proven methods from your teaching corpus, ensuring students engage meaningfully with the content while following familiar patterns and approaches.`,
+    medium: `${topic} represents a complex and engaging subject that offers numerous opportunities for language learning and cultural exploration. Based on your analyzed teaching methodology, this lesson incorporates ${interactionStyle} approaches and maintains the ${teachingStyle.toLowerCase()} style you consistently use. Students will encounter authentic materials and participate in activities that mirror your established pedagogical preferences. The content is structured to follow your typical lesson progression, incorporating the specific activity types and assessment methods that characterize your teaching approach. This ensures consistency with your educational philosophy while introducing fresh content on ${topic}. Through carefully designed interactions and scaffolded learning experiences, students will develop both language skills and cultural awareness related to this important topic.`,
+    long: `${topic} is a multifaceted subject that offers rich opportunities for comprehensive language learning and deep cultural exploration. This extensive lesson has been carefully designed to reflect your unique teaching methodology, as identified through detailed analysis of your PowerPoint corpus. The lesson incorporates your preferred ${interactionStyle} interaction style and maintains the ${teachingStyle.toLowerCase()} approach that defines your educational philosophy. Students will engage with authentic, real-world materials while participating in carefully structured activities that mirror your established pedagogical patterns. The content progression follows your typical lesson flow, beginning with engaging hooks, moving through systematic content delivery, and concluding with meaningful assessment and reflection. Each component has been tailored to match your specific preferences for activity types, timing, and student interaction patterns. Throughout the lesson, students will encounter vocabulary, reading passages, and discussion topics that not only teach about ${topic} but also reinforce language skills through methods that feel familiar and comfortable based on your teaching style. The activities progress from individual reflection to pair work and group discussions, following the collaborative patterns identified in your corpus analysis. This comprehensive approach ensures that students receive instruction that maintains the quality and effectiveness of your established teaching methodology while exploring new and engaging content related to ${topic}.`
+  };
+
+  const readingLength = settings?.readingLength || 'medium';
   
   return {
-    title: `Exploring ${topic}: ${teachingStyle}`,
-    introduction: `Welcome to today's lesson on ${topic}. Based on your analyzed teaching methodology, this lesson incorporates ${activityTypes.join(' and ')} to ensure maximum engagement and learning outcomes.`,
-    readingPassage: `${topic} represents a fascinating subject that connects to our daily experiences in meaningful ways. Through the lens of your established teaching methodology, we explore this topic using proven pedagogical approaches that have been identified through corpus analysis. Your teaching style emphasizes ${teachingStyle.toLowerCase()}, which we'll implement throughout this lesson. The content is structured to match your preferred lesson flow patterns, incorporating the specific activity types and assessment methods that characterize your teaching approach. Students will engage with visual elements, collaborative discussions, and hands-on activities that reflect your established pedagogical preferences. This ensures consistency with your teaching brand while delivering fresh content on ${topic}.`,
-    vocabulary: [
-      { word: "methodology", definition: "A systematic approach to teaching and learning", example: "Our methodology focuses on student engagement and real-world application." },
-      { word: "pedagogical", definition: "Related to teaching methods and educational theory", example: "The pedagogical approach used in this lesson promotes active learning." },
-      { word: "corpus", definition: "A large collection of written or spoken material for analysis", example: "The corpus analysis revealed consistent patterns in teaching style." },
-      { word: "engagement", definition: "Active participation and involvement in learning", example: "Student engagement increases when lessons match familiar teaching patterns." },
-      { word: "collaborative", definition: "Working together towards a common educational goal", example: "Collaborative activities enhance peer learning and knowledge sharing." },
-    ],
+    title: `Exploring ${topic}: A ${duration}-Minute ${difficulty} Lesson`,
+    introduction: `Welcome to today's ${duration}-minute lesson on ${topic}. Based on your analyzed teaching methodology, this lesson incorporates ${activityTypes.join(' and ')} to ensure maximum engagement. We'll follow your established ${teachingStyle.toLowerCase()} approach throughout.`,
+    readingPassage: readingPassages[readingLength],
+    vocabulary: Array.from({ length: vocabCount }, (_, i) => {
+      const words = [
+        { word: "methodology", definition: "A systematic approach to teaching", example: "Our methodology focuses on student engagement." },
+        { word: "analysis", definition: "Detailed examination of elements", example: "The analysis revealed clear patterns in teaching style." },
+        { word: "engagement", definition: "Active participation in learning", example: "Student engagement increases with familiar teaching patterns." },
+        { word: "authentic", definition: "Real and genuine materials", example: "Authentic materials connect learning to real life." },
+        { word: "collaborative", definition: "Working together cooperatively", example: "Collaborative activities enhance peer learning." },
+        { word: "scaffolded", definition: "Providing structured support", example: "Scaffolded instruction helps students build confidence." },
+        { word: "comprehensive", definition: "Complete and thorough", example: "A comprehensive approach covers all skill areas." },
+        { word: "systematic", definition: "Done in an organized way", example: "Systematic teaching follows clear progression patterns." }
+      ];
+      return words[i % words.length];
+    }),
     comprehensionQuestions: [
-      `How does ${topic} relate to the teaching methodology identified in your corpus?`,
-      "What are the key pedagogical patterns that make this lesson effective?",
-      "How do the analyzed teaching preferences enhance student understanding?",
-      "What role does corpus analysis play in creating personalized lessons?"
+      `How does ${topic} relate to your daily experience?`,
+      `What are the main concepts we explored about ${topic}?`,
+      `How do the teaching methods used here compare to your expectations?`,
+      `What connections can you make between ${topic} and other subjects?`
     ],
     discussionQuestions: [
-      `How can ${topic} be integrated into your existing teaching framework?`,
-      "What aspects of your teaching style contribute most to student success?",
-      "How might corpus analysis inform future lesson development?",
-      "What connections do you see between this topic and your pedagogical approach?"
+      `In your opinion, what is the most important aspect of ${topic}?`,
+      `How might ${topic} be relevant in your future career or studies?`,
+      `What questions do you still have about ${topic}?`,
+      `How can we apply what we learned about ${topic} in real situations?`
     ],
-    activities: activityTypes.map((type, index) => ({
+    activities: activityTypes.slice(0, settings?.activityIntensity || 3).map((type, index) => ({
       type: type,
-      content: `${type} activity focused on ${topic}`,
-      instructions: `Implement this ${type.toLowerCase()} using your established teaching methodology. Follow the lesson structure patterns identified in your corpus analysis.`
+      content: `${type} activity focused on ${topic} concepts`,
+      instructions: `Implement this ${type.toLowerCase()} following your established ${interactionStyle} methodology. Duration: ${Math.floor(duration / (settings?.activityIntensity || 3))} minutes.`
     })),
-    conclusion: `Today's exploration of ${topic} has demonstrated how corpus analysis can inform personalized lesson creation. The lesson structure and activities reflect your established teaching methodology, ensuring consistency with your pedagogical brand while delivering engaging content.`
+    conclusion: `Today's exploration of ${topic} demonstrates how personalized lesson generation can maintain your teaching style while delivering fresh content. The ${duration}-minute structure and ${difficulty} level match your specified preferences, ensuring consistency with your pedagogical approach.`
   };
 };
