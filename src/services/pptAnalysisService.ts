@@ -223,9 +223,29 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   
   // Extract all text content for comprehensive analysis
   let allText = '';
+  let slideTitle = '';
+  
+  // Look for title elements first - these often contain activity types
+  const titleElements = doc.querySelectorAll('p\\:ph[type="title"], p\\:ph[type="ctrTitle"], a\\:p:first-child');
   const textElements = doc.querySelectorAll('a\\:t, p\\:txBody, a\\:p');
   
-  textElements.forEach((element) => {
+  // Extract title specifically
+  if (titleElements.length > 0) {
+    const titleText = titleElements[0].textContent?.trim() || '';
+    if (titleText && titleText.length > 1) {
+      slideTitle = titleText;
+    }
+  }
+  
+  // If no title found in title elements, use first text element as potential title
+  if (!slideTitle && textElements.length > 0) {
+    const firstText = textElements[0].textContent?.trim() || '';
+    if (firstText && firstText.length > 1 && firstText.length < 100) {
+      slideTitle = firstText;
+    }
+  }
+  
+  textElements.forEach((element, index) => {
     const textContent = element.textContent?.trim();
     if (textContent && textContent.length > 1) {
       allText += textContent.toLowerCase() + ' ';
@@ -238,7 +258,7 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
       
       elements.push({
         type: 'text',
-        position: { x: 0, y: elements.length * 20, width: 200, height: 20 },
+        position: { x: 0, y: index * 20, width: 200, height: 20 },
         content: textContent,
         formatting: {
           fontSize,
@@ -250,10 +270,12 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
     }
   });
   
-  // More sophisticated activity type detection
-  const activityType = determineActivityType(allText);
+  // Use slide title as primary source for activity type, with fallback to content analysis
+  const activityType = slideTitle ? determineActivityTypeFromTitle(slideTitle) : determineActivityType(allText);
   const contentType = determineContentType(allText);
   const layoutType = determineLayoutType(elements);
+  
+  console.log(`Slide ${slideNumber} - Title: "${slideTitle}" -> Activity Type: "${activityType}"`);
   
   return {
     slideNumber,
@@ -270,6 +292,111 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
     activityType,
     contentType
   };
+};
+
+const determineActivityTypeFromTitle = (title: string): string => {
+  const lowerTitle = title.toLowerCase().trim();
+  
+  console.log(`Analyzing title for activity type: "${title}"`);
+  
+  // Direct activity type matches from title
+  if (lowerTitle.includes('warm up') || lowerTitle.includes('warm-up') || lowerTitle.includes('warmer')) {
+    return 'Warm-up Activity';
+  }
+  
+  if (lowerTitle.includes('discussion') || lowerTitle.includes('discuss')) {
+    return 'Discussion Activity';
+  }
+  
+  if (lowerTitle.includes('pair work') || lowerTitle.includes('pair activity') || lowerTitle.includes('pairs')) {
+    return 'Pair Work';
+  }
+  
+  if (lowerTitle.includes('group work') || lowerTitle.includes('group activity') || lowerTitle.includes('groups')) {
+    return 'Group Activity';
+  }
+  
+  if (lowerTitle.includes('role play') || lowerTitle.includes('roleplay') || lowerTitle.includes('role-play')) {
+    return 'Role Playing';
+  }
+  
+  if (lowerTitle.includes('vocabulary') || lowerTitle.includes('vocab')) {
+    return 'Vocabulary Activity';
+  }
+  
+  if (lowerTitle.includes('grammar') || lowerTitle.includes('language focus')) {
+    return 'Grammar Activity';
+  }
+  
+  if (lowerTitle.includes('listening') || lowerTitle.includes('listen')) {
+    return 'Listening Activity';
+  }
+  
+  if (lowerTitle.includes('reading') || lowerTitle.includes('read')) {
+    return 'Reading Activity';
+  }
+  
+  if (lowerTitle.includes('writing') || lowerTitle.includes('write')) {
+    return 'Writing Activity';
+  }
+  
+  if (lowerTitle.includes('speaking') || lowerTitle.includes('speak')) {
+    return 'Speaking Activity';
+  }
+  
+  if (lowerTitle.includes('practice') || lowerTitle.includes('drill')) {
+    return 'Practice Activity';
+  }
+  
+  if (lowerTitle.includes('game') || lowerTitle.includes('fun activity')) {
+    return 'Game Activity';
+  }
+  
+  if (lowerTitle.includes('presentation') || lowerTitle.includes('present')) {
+    return 'Presentation Activity';
+  }
+  
+  if (lowerTitle.includes('review') || lowerTitle.includes('revision')) {
+    return 'Review Activity';
+  }
+  
+  if (lowerTitle.includes('homework') || lowerTitle.includes('assignment')) {
+    return 'Homework Assignment';
+  }
+  
+  if (lowerTitle.includes('introduction') || lowerTitle.includes('intro')) {
+    return 'Introduction';
+  }
+  
+  if (lowerTitle.includes('objective') || lowerTitle.includes('aims') || lowerTitle.includes('goals')) {
+    return 'Learning Objectives';
+  }
+  
+  if (lowerTitle.includes('conclusion') || lowerTitle.includes('summary') || lowerTitle.includes('wrap up')) {
+    return 'Conclusion';
+  }
+  
+  if (lowerTitle.includes('brainstorm') || lowerTitle.includes('ideas')) {
+    return 'Brainstorming Activity';
+  }
+  
+  if (lowerTitle.includes('match') || lowerTitle.includes('matching')) {
+    return 'Matching Activity';
+  }
+  
+  if (lowerTitle.includes('gap fill') || lowerTitle.includes('fill in') || lowerTitle.includes('complete')) {
+    return 'Gap Fill Activity';
+  }
+  
+  // If title doesn't match specific patterns, use the title itself as activity type if it's descriptive
+  if (lowerTitle.length > 3 && lowerTitle.length < 50) {
+    // Capitalize first letter of each word for better presentation
+    return title.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }
+  
+  return 'Content Presentation';
 };
 
 const determineActivityType = (text: string): string => {
@@ -592,16 +719,16 @@ const analyzePedagogicalPatterns = (slides: SlideAnalysis[]) => {
     return 'Content Development';
   });
   
-  // Get unique activity types, excluding generic ones if we have specific ones
+  // Get unique activity types, but don't filter out 'Content Presentation' if it's the only type
   const uniqueActivityTypes = [...new Set(activityTypes)];
-  const specificActivityTypes = uniqueActivityTypes.filter(type => 
-    type !== 'Content Presentation' && type !== 'Main Content'
-  );
+  
+  console.log('All activity types found:', activityTypes);
+  console.log('Unique activity types:', uniqueActivityTypes);
   
   return {
     introductionStyle: contentTypes[0] || 'Direct Introduction',
     contentProgression: lessonFlow,
-    activityTypes: specificActivityTypes.length > 0 ? specificActivityTypes : uniqueActivityTypes,
+    activityTypes: uniqueActivityTypes,
     assessmentMethods: ['Formative Assessment'],
     conclusionStyle: contentTypes[contentTypes.length - 1] || 'Standard Conclusion'
   };
