@@ -225,26 +225,39 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   let allText = '';
   let slideTitle = '';
   
-  // Look for title elements first - these often contain activity types
-  const titleElements = doc.querySelectorAll('p\\:ph[type="title"], p\\:ph[type="ctrTitle"], a\\:p:first-child');
+  // More comprehensive title extraction - look for actual title placeholders first
+  const titlePlaceholders = doc.querySelectorAll('p\\:ph[type="title"], p\\:ph[type="ctrTitle"]');
+  
+  // If we find title placeholders, get their text content
+  if (titlePlaceholders.length > 0) {
+    for (const placeholder of titlePlaceholders) {
+      // Look for text within this placeholder's parent elements
+      const parentShape = placeholder.closest('p\\:sp');
+      if (parentShape) {
+        const textElements = parentShape.querySelectorAll('a\\:t');
+        const titleTexts = Array.from(textElements).map(el => el.textContent?.trim()).filter(Boolean);
+        if (titleTexts.length > 0) {
+          slideTitle = titleTexts.join(' ').trim();
+          break;
+        }
+      }
+    }
+  }
+  
+  // If no title found in placeholders, look for the first text element that might be a title
+  if (!slideTitle) {
+    const allTextElements = doc.querySelectorAll('a\\:t');
+    if (allTextElements.length > 0) {
+      const firstTextContent = allTextElements[0].textContent?.trim();
+      // Only use as title if it's not too long and looks like a title
+      if (firstTextContent && firstTextContent.length > 1 && firstTextContent.length < 150) {
+        slideTitle = firstTextContent;
+      }
+    }
+  }
+  
+  // Collect all text for content analysis
   const textElements = doc.querySelectorAll('a\\:t, p\\:txBody, a\\:p');
-  
-  // Extract title specifically
-  if (titleElements.length > 0) {
-    const titleText = titleElements[0].textContent?.trim() || '';
-    if (titleText && titleText.length > 1) {
-      slideTitle = titleText;
-    }
-  }
-  
-  // If no title found in title elements, use first text element as potential title
-  if (!slideTitle && textElements.length > 0) {
-    const firstText = textElements[0].textContent?.trim() || '';
-    if (firstText && firstText.length > 1 && firstText.length < 100) {
-      slideTitle = firstText;
-    }
-  }
-  
   textElements.forEach((element, index) => {
     const textContent = element.textContent?.trim();
     if (textContent && textContent.length > 1) {
@@ -270,12 +283,12 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
     }
   });
   
-  // Use slide title as primary source for activity type, with fallback to content analysis
-  const activityType = slideTitle ? determineActivityTypeFromTitle(slideTitle) : determineActivityType(allText);
+  // Use the actual slide title as the activity type, cleaned up
+  const activityType = slideTitle ? cleanAndFormatTitle(slideTitle) : 'Content Slide';
   const contentType = determineContentType(allText);
   const layoutType = determineLayoutType(elements);
   
-  console.log(`Slide ${slideNumber} - Title: "${slideTitle}" -> Activity Type: "${activityType}"`);
+  console.log(`Slide ${slideNumber} - Raw Title: "${slideTitle}" -> Activity Type: "${activityType}"`);
   
   return {
     slideNumber,
@@ -292,6 +305,27 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
     activityType,
     contentType
   };
+};
+
+const cleanAndFormatTitle = (title: string): string => {
+  // Clean up the title and use it directly as activity type
+  let cleaned = title.trim();
+  
+  // Remove common prefixes/suffixes that aren't part of the activity name
+  cleaned = cleaned.replace(/^(slide\s*\d+:?\s*|activity\s*\d+:?\s*)/i, '');
+  cleaned = cleaned.replace(/\s*-\s*slide\s*\d+$/i, '');
+  
+  // Capitalize first letter of each word for consistent formatting
+  cleaned = cleaned.split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+  
+  // If title is too short or generic, provide a default
+  if (cleaned.length < 2 || cleaned.toLowerCase() === 'title') {
+    return 'Content Slide';
+  }
+  
+  return cleaned;
 };
 
 const determineActivityTypeFromTitle = (title: string): string => {
@@ -698,6 +732,7 @@ const extractImageStyles = (slides: SlideAnalysis[]): string[] => {
 };
 
 const analyzePedagogicalPatterns = (slides: SlideAnalysis[]) => {
+  // Get all activity types directly from slide titles - don't filter anything out
   const activityTypes = slides
     .map(slide => slide.activityType)
     .filter(Boolean) as string[];
@@ -706,9 +741,9 @@ const analyzePedagogicalPatterns = (slides: SlideAnalysis[]) => {
     .map(slide => slide.contentType)
     .filter(Boolean) as string[];
   
-  // Create actual lesson flow from slides with better activity detection
+  // Create actual lesson flow from slides
   const lessonFlow = slides.map((slide, index) => {
-    if (slide.activityType && slide.activityType !== 'Content Presentation') {
+    if (slide.activityType && slide.activityType !== 'Content Slide') {
       return slide.activityType;
     }
     if (slide.contentType && slide.contentType !== 'Main Content') {
@@ -719,16 +754,17 @@ const analyzePedagogicalPatterns = (slides: SlideAnalysis[]) => {
     return 'Content Development';
   });
   
-  // Get unique activity types, but don't filter out 'Content Presentation' if it's the only type
+  // Get ALL unique activity types - don't filter any out
   const uniqueActivityTypes = [...new Set(activityTypes)];
   
   console.log('All activity types found:', activityTypes);
   console.log('Unique activity types:', uniqueActivityTypes);
+  console.log('Total unique activity types:', uniqueActivityTypes.length);
   
   return {
     introductionStyle: contentTypes[0] || 'Direct Introduction',
     contentProgression: lessonFlow,
-    activityTypes: uniqueActivityTypes,
+    activityTypes: uniqueActivityTypes, // Keep ALL unique activity types
     assessmentMethods: ['Formative Assessment'],
     conclusionStyle: contentTypes[contentTypes.length - 1] || 'Standard Conclusion'
   };
@@ -747,9 +783,15 @@ export const aggregateAnalysis = (analyses: LessonStructure[]): any => {
     }))
   });
   
-  // Aggregate all ACTUAL activity types found
+  // Aggregate ALL activity types found across all files - don't filter anything
   const allActivityTypes = analyses.flatMap(a => a.pedagogicalPatterns.activityTypes);
-  const uniqueActivityTypes = [...new Set(allActivityTypes)].filter(type => type && type !== 'Content Presentation');
+  const uniqueActivityTypes = [...new Set(allActivityTypes)];
+  
+  console.log('Aggregating activity types:', {
+    allActivityTypes,
+    uniqueActivityTypes,
+    totalUniqueTypes: uniqueActivityTypes.length
+  });
   
   // Get actual lesson flow patterns
   const allFlowPatterns = analyses.flatMap(a => a.pedagogicalPatterns.contentProgression);
@@ -769,7 +811,7 @@ export const aggregateAnalysis = (analyses: LessonStructure[]): any => {
   return {
     overview: {
       totalLessons,
-      totalSlides, // This is now accurate
+      totalSlides,
       averageSlidesPerLesson: totalSlides > 0 ? Math.round(totalSlides / totalLessons) : 0,
       analysisDate: new Date().toISOString().split('T')[0]
     },
@@ -785,7 +827,7 @@ export const aggregateAnalysis = (analyses: LessonStructure[]): any => {
     },
     pedagogicalInsights: {
       teachingStyle: 'Interactive and systematic approach with varied activities',
-      preferredActivityTypes: uniqueActivityTypes.length > 0 ? uniqueActivityTypes : ['Mixed teaching activities'],
+      preferredActivityTypes: uniqueActivityTypes, // Use ALL unique activity types
       lessonStructurePattern: uniqueFlowPatterns.length > 0 ? uniqueFlowPatterns.slice(0, 6) : [
         'Introduction', 'Content Presentation', 'Practice Activities', 'Assessment'
       ],
