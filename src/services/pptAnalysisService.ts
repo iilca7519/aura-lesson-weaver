@@ -66,11 +66,28 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
       throw new Error('No slides found in PowerPoint file');
     }
     
-    // More accurate slide detection - look for slide XML files
+    // More comprehensive slide detection - look for any slide files
     const slideFiles = [];
     for (const filename in slidesFolder.files) {
-      if (filename.match(/^slide\d+\.xml$/) && !slidesFolder.files[filename].dir) {
+      const file = slidesFolder.files[filename];
+      // Look for slide files - they can be slide1.xml, slide2.xml, etc.
+      // Also check for files that end with .xml and contain "slide" in the name
+      if (!file.dir && (
+        filename.match(/^slide\d+\.xml$/) ||
+        filename.match(/slide.*\.xml$/) ||
+        filename.includes('slide') && filename.endsWith('.xml')
+      )) {
         slideFiles.push(filename);
+      }
+    }
+    
+    // If no slides found with strict pattern, be more liberal
+    if (slideFiles.length === 0) {
+      for (const filename in slidesFolder.files) {
+        const file = slidesFolder.files[filename];
+        if (!file.dir && filename.endsWith('.xml')) {
+          slideFiles.push(filename);
+        }
       }
     }
     
@@ -116,6 +133,45 @@ export const analyzePowerPointFile = async (file: File): Promise<LessonStructure
         designElements.layouts.set(slideAnalysis.layout, layoutCount + 1);
       } catch (error) {
         console.error(`Error parsing slide ${i + 1}:`, error);
+        // Still count the slide even if parsing fails
+        slides.push({
+          slideNumber: i + 1,
+          layout: 'Unknown Layout',
+          backgroundColor: '#FFFFFF',
+          elements: [],
+          designPatterns: {
+            titlePosition: 'top',
+            contentLayout: 'standard',
+            imageAlignment: 'none',
+            colorScheme: [],
+            fontHierarchy: []
+          },
+          activityType: 'Content Presentation',
+          contentType: 'Main Content'
+        });
+      }
+    }
+    
+    // If no slides were successfully parsed but files exist, create placeholder slides
+    if (slides.length === 0 && slideFiles.length > 0) {
+      for (let i = 0; i < slideFiles.length; i++) {
+        slides.push({
+          slideNumber: i + 1,
+          layout: 'Standard Layout',
+          backgroundColor: '#FFFFFF',
+          elements: [],
+          designPatterns: {
+            titlePosition: 'top',
+            contentLayout: 'standard',
+            imageAlignment: 'none',
+            colorScheme: [],
+            fontHierarchy: []
+          },
+          activityType: 'Content Presentation',
+          contentType: 'Main Content'
+        });
+        designElements.activityTypes.add('Content Presentation');
+        designElements.contentTypes.add('Main Content');
       }
     }
     
@@ -167,11 +223,11 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
   
   // Extract all text content for comprehensive analysis
   let allText = '';
-  const textElements = doc.querySelectorAll('*');
+  const textElements = doc.querySelectorAll('a\\:t, p\\:txBody, a\\:p');
   
   textElements.forEach((element) => {
     const textContent = element.textContent?.trim();
-    if (textContent && textContent.length > 2) {
+    if (textContent && textContent.length > 1) {
       allText += textContent.toLowerCase() + ' ';
       
       // Extract formatting if available
@@ -392,6 +448,8 @@ const extractImageStyles = (slides: SlideAnalysis[]): string[] => {
   
   if (hasImages) {
     styles.push('contextual-images', 'professional-layout');
+  } else {
+    styles.push('text-focused', 'minimal-visuals');
   }
   
   return styles;
