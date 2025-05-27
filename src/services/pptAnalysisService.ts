@@ -275,45 +275,147 @@ const analyzeSlideContent = async (slideXml: string, slideNumber: number): Promi
 const determineActivityType = (text: string): string => {
   const lowerText = text.toLowerCase();
   
-  // More specific activity detection
-  if (lowerText.includes('discuss') || lowerText.includes('discussion') || lowerText.includes('talk about') || lowerText.includes('share your thoughts')) {
+  // More comprehensive activity detection with broader patterns
+  if (lowerText.includes('discuss') || lowerText.includes('discussion') || lowerText.includes('talk about') || 
+      lowerText.includes('share your thoughts') || lowerText.includes('what do you think') || 
+      lowerText.includes('opinion') || lowerText.includes('debate')) {
     return 'Discussion Activity';
   }
-  if (lowerText.includes('pair work') || lowerText.includes('work with partner') || lowerText.includes('partner activity')) {
+  
+  if (lowerText.includes('pair work') || lowerText.includes('work with partner') || 
+      lowerText.includes('partner activity') || lowerText.includes('work in pairs') ||
+      lowerText.includes('find a partner')) {
     return 'Pair Work';
   }
-  if (lowerText.includes('group work') || lowerText.includes('in groups') || lowerText.includes('team activity')) {
+  
+  if (lowerText.includes('group work') || lowerText.includes('in groups') || 
+      lowerText.includes('team activity') || lowerText.includes('work together') ||
+      lowerText.includes('form groups') || lowerText.includes('group of')) {
     return 'Group Activity';
   }
-  if (lowerText.includes('role play') || lowerText.includes('roleplay') || lowerText.includes('act out') || lowerText.includes('pretend you are')) {
+  
+  if (lowerText.includes('role play') || lowerText.includes('roleplay') || 
+      lowerText.includes('act out') || lowerText.includes('pretend you are') ||
+      lowerText.includes('imagine you are') || lowerText.includes('scenario')) {
     return 'Role Playing';
   }
-  if (lowerText.includes('match') || lowerText.includes('matching') || lowerText.includes('connect the') || lowerText.includes('link the')) {
+  
+  if (lowerText.includes('match') || lowerText.includes('matching') || 
+      lowerText.includes('connect the') || lowerText.includes('link the') ||
+      lowerText.includes('pair up') || lowerText.includes('corresponds')) {
     return 'Matching Exercise';
   }
-  if (lowerText.includes('fill in') || lowerText.includes('complete the') || lowerText.includes('fill the blank') || lowerText.includes('gap fill')) {
+  
+  if (lowerText.includes('fill in') || lowerText.includes('complete the') || 
+      lowerText.includes('fill the blank') || lowerText.includes('gap fill') ||
+      lowerText.includes('missing word') || lowerText.includes('blank')) {
     return 'Gap Fill Activity';
   }
-  if (lowerText.includes('listen') || lowerText.includes('listening') || lowerText.includes('audio') || lowerText.includes('hear the')) {
+  
+  if (lowerText.includes('listen') || lowerText.includes('listening') || 
+      lowerText.includes('audio') || lowerText.includes('hear the') ||
+      lowerText.includes('sound') || lowerText.includes('recording')) {
     return 'Listening Activity';
   }
-  if (lowerText.includes('read') || lowerText.includes('reading') || lowerText.includes('passage') || lowerText.includes('text analysis')) {
+  
+  if (lowerText.includes('read') || lowerText.includes('reading') || 
+      lowerText.includes('passage') || lowerText.includes('text analysis') ||
+      lowerText.includes('article') || lowerText.includes('story')) {
     return 'Reading Activity';
   }
-  if (lowerText.includes('write') || lowerText.includes('writing') || lowerText.includes('composition') || lowerText.includes('essay')) {
+  
+  if (lowerText.includes('write') || lowerText.includes('writing') || 
+      lowerText.includes('composition') || lowerText.includes('essay') ||
+      lowerText.includes('paragraph') || lowerText.includes('journal')) {
     return 'Writing Activity';
   }
-  if (lowerText.includes('vocabulary') || lowerText.includes('new words') || lowerText.includes('definitions') || lowerText.includes('word study')) {
+  
+  if (lowerText.includes('vocabulary') || lowerText.includes('new words') || 
+      lowerText.includes('definitions') || lowerText.includes('word study') ||
+      lowerText.includes('meaning') || lowerText.includes('synonym') ||
+      lowerText.includes('antonym')) {
     return 'Vocabulary Building';
   }
-  if (lowerText.includes('question') || lowerText.includes('answer') || lowerText.includes('quiz') || lowerText.includes('q&a')) {
+  
+  if (lowerText.includes('question') || lowerText.includes('answer') || 
+      lowerText.includes('quiz') || lowerText.includes('q&a') ||
+      lowerText.includes('test') || lowerText.includes('check your understanding')) {
     return 'Q&A Session';
   }
-  if (lowerText.includes('practice') || lowerText.includes('exercise') || lowerText.includes('drill') || lowerText.includes('activity')) {
+  
+  if (lowerText.includes('practice') || lowerText.includes('exercise') || 
+      lowerText.includes('drill') || lowerText.includes('try this') ||
+      lowerText.includes('let\'s practice') || lowerText.includes('your turn')) {
     return 'Practice Exercise';
   }
-  if (lowerText.includes('present') || lowerText.includes('presentation') || lowerText.includes('show') || lowerText.includes('demonstrate')) {
+  
+  if (lowerText.includes('present') || lowerText.includes('presentation') || 
+      lowerText.includes('show') || lowerText.includes('demonstrate') ||
+      lowerText.includes('explain to class') || lowerText.includes('share with')) {
     return 'Presentation Activity';
+  }
+  
+  if (lowerText.includes('game') || lowerText.includes('play') || 
+      lowerText.includes('fun activity') || lowerText.includes('competition') ||
+      lowerText.includes('challenge') || lowerText.includes('race')) {
+    return 'Game Activity';
+  }
+  
+  if (lowerText.includes('homework') || lowerText.includes('assignment') || 
+      lowerText.includes('for next class') || lowerText.includes('at home') ||
+      lowerText.includes('take home')) {
+    return 'Homework Assignment';
+  }
+  
+  if (lowerText.includes('review') || lowerText.includes('summary') || 
+      lowerText.includes('recap') || lowerText.includes('what we learned') ||
+      lowerText.includes('remember') || lowerText.includes('recall')) {
+    return 'Review Activity';
+  }
+  
+  if (lowerText.includes('warm up') || lowerText.includes('warm-up') || 
+      lowerText.includes('ice breaker') || lowerText.includes('getting started') ||
+      lowerText.includes('opener')) {
+    return 'Warm-up Activity';
+  }
+  
+  if (lowerText.includes('brainstorm') || lowerText.includes('think of') || 
+      lowerText.includes('come up with') || lowerText.includes('ideas') ||
+      lowerText.includes('suggest')) {
+    return 'Brainstorming';
+  }
+  
+  // Check for instructional content patterns
+  if (lowerText.includes('objective') || lowerText.includes('goal') || 
+      lowerText.includes('aim') || lowerText.includes('by the end') ||
+      lowerText.includes('learning outcomes')) {
+    return 'Learning Objectives';
+  }
+  
+  if (lowerText.includes('grammar') || lowerText.includes('structure') || 
+      lowerText.includes('language point') || lowerText.includes('tense') ||
+      lowerText.includes('verb') || lowerText.includes('noun')) {
+    return 'Grammar Instruction';
+  }
+  
+  // Default based on slide position and common patterns
+  if (lowerText.includes('welcome') || lowerText.includes('hello') || 
+      lowerText.includes('good morning') || lowerText.includes('introduction')) {
+    return 'Introduction Slide';
+  }
+  
+  if (lowerText.includes('thank you') || lowerText.includes('goodbye') || 
+      lowerText.includes('see you next') || lowerText.includes('conclusion')) {
+    return 'Conclusion Slide';
+  }
+  
+  // Check content length and complexity to determine activity type
+  if (lowerText.length > 200) {
+    return 'Content Explanation';
+  }
+  
+  if (lowerText.length < 50 && (lowerText.includes('?') || lowerText.includes('activity'))) {
+    return 'Quick Activity';
   }
   
   return 'Content Presentation';
@@ -322,25 +424,38 @@ const determineActivityType = (text: string): string => {
 const determineContentType = (text: string): string => {
   const lowerText = text.toLowerCase();
   
-  if (lowerText.includes('objective') || lowerText.includes('goal') || lowerText.includes('aim') || lowerText.includes('by the end')) {
+  if (lowerText.includes('objective') || lowerText.includes('goal') || 
+      lowerText.includes('aim') || lowerText.includes('by the end')) {
     return 'Learning Objectives';
   }
-  if (lowerText.includes('introduction') || lowerText.includes('welcome') || lowerText.includes('today we will') || lowerText.includes('warm up')) {
+  
+  if (lowerText.includes('introduction') || lowerText.includes('welcome') || 
+      lowerText.includes('today we will') || lowerText.includes('warm up')) {
     return 'Introduction';
   }
-  if (lowerText.includes('vocabulary') || lowerText.includes('new words') || lowerText.includes('key terms')) {
+  
+  if (lowerText.includes('vocabulary') || lowerText.includes('new words') || 
+      lowerText.includes('key terms')) {
     return 'Vocabulary Introduction';
   }
-  if (lowerText.includes('grammar') || lowerText.includes('structure') || lowerText.includes('language point')) {
+  
+  if (lowerText.includes('grammar') || lowerText.includes('structure') || 
+      lowerText.includes('language point')) {
     return 'Grammar Point';
   }
-  if (lowerText.includes('practice') || lowerText.includes('exercise') || lowerText.includes('try this')) {
+  
+  if (lowerText.includes('practice') || lowerText.includes('exercise') || 
+      lowerText.includes('try this')) {
     return 'Practice Activity';
   }
-  if (lowerText.includes('homework') || lowerText.includes('assignment') || lowerText.includes('next time') || lowerText.includes('for next class')) {
+  
+  if (lowerText.includes('homework') || lowerText.includes('assignment') || 
+      lowerText.includes('next time') || lowerText.includes('for next class')) {
     return 'Homework/Conclusion';
   }
-  if (lowerText.includes('review') || lowerText.includes('summary') || lowerText.includes('recap') || lowerText.includes('what we learned')) {
+  
+  if (lowerText.includes('review') || lowerText.includes('summary') || 
+      lowerText.includes('recap') || lowerText.includes('what we learned')) {
     return 'Review/Summary';
   }
   
@@ -464,19 +579,29 @@ const analyzePedagogicalPatterns = (slides: SlideAnalysis[]) => {
     .map(slide => slide.contentType)
     .filter(Boolean) as string[];
   
-  // Create actual lesson flow from slides
+  // Create actual lesson flow from slides with better activity detection
   const lessonFlow = slides.map((slide, index) => {
-    if (slide.activityType) return slide.activityType;
-    if (slide.contentType) return slide.contentType;
+    if (slide.activityType && slide.activityType !== 'Content Presentation') {
+      return slide.activityType;
+    }
+    if (slide.contentType && slide.contentType !== 'Main Content') {
+      return slide.contentType;
+    }
     if (index === 0) return 'Introduction';
     if (index === slides.length - 1) return 'Conclusion';
     return 'Content Development';
   });
   
+  // Get unique activity types, excluding generic ones if we have specific ones
+  const uniqueActivityTypes = [...new Set(activityTypes)];
+  const specificActivityTypes = uniqueActivityTypes.filter(type => 
+    type !== 'Content Presentation' && type !== 'Main Content'
+  );
+  
   return {
     introductionStyle: contentTypes[0] || 'Direct Introduction',
     contentProgression: lessonFlow,
-    activityTypes: [...new Set(activityTypes)],
+    activityTypes: specificActivityTypes.length > 0 ? specificActivityTypes : uniqueActivityTypes,
     assessmentMethods: ['Formative Assessment'],
     conclusionStyle: contentTypes[contentTypes.length - 1] || 'Standard Conclusion'
   };
