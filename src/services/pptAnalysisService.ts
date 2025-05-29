@@ -285,6 +285,36 @@ const analyzePedagogicalPatterns = (slides: SlideAnalysis[]) => {
   };
 };
 
+const extractLessonFlow = (slides: SlideAnalysis[]): string[] => {
+  return slides.map((slide, index) => {
+    if (slide.activityType && slide.activityType !== 'Content Slide') {
+      return slide.activityType;
+    }
+    if (slide.contentType && slide.contentType !== 'Main Content') {
+      return slide.contentType;
+    }
+    if (index === 0) return 'Introduction';
+    if (index === slides.length - 1) return 'Conclusion';
+    return 'Content Development';
+  });
+};
+
+const extractLogoPositions = (slides: SlideAnalysis[]): string[] => {
+  // Simple implementation - can be enhanced based on actual logo detection
+  return ['top-right', 'header', 'footer'];
+};
+
+const extractImageStyles = (slides: SlideAnalysis[]): string[] => {
+  const hasImages = slides.some(slide => 
+    slide.elements.some(element => element.type === 'image')
+  );
+  
+  if (hasImages) {
+    return ['integrated', 'supporting', 'decorative'];
+  }
+  return ['minimal-visuals'];
+};
+
 export const aggregateAnalysis = (analyses: LessonStructure[]): any => {
   const totalSlides = analyses.reduce((sum, analysis) => sum + analysis.totalSlides, 0);
   const totalLessons = analyses.length;
