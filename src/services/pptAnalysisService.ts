@@ -1,3 +1,6 @@
+import { extractRawPowerPointContent } from './pptRawExtractor';
+import { categorizeActivityFromRawSlide } from './activityTypeDetection';
+
 interface SlideElement {
   type: 'text' | 'image' | 'shape' | 'chart' | 'table';
   position: { x: number; y: number; width: number; height: number };
