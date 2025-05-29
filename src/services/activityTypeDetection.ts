@@ -1,141 +1,160 @@
 
-// Enhanced activity type detection with pedagogical categorization
+// Enhanced activity type detection using structured raw PowerPoint data
+interface RawTextElement {
+  text: string;
+  fontSize?: number;
+  fontFamily?: string;
+  position?: { x: number; y: number };
+  isTitle?: boolean;
+  hierarchy: number;
+}
+
+interface RawSlideContent {
+  slideNumber: number;
+  xmlContent: string;
+  textElements: RawTextElement[];
+  title: string;
+  allText: string;
+  hasImages: boolean;
+  hasShapes: boolean;
+  layoutHints: string[];
+}
+
 interface ActivityPattern {
   keywords: string[];
   category: string;
-  priority: number; // Higher priority = more specific match
+  priority: number;
 }
 
-// Pedagogical activity type patterns
+// Comprehensive pedagogical activity patterns
 const ACTIVITY_PATTERNS: ActivityPattern[] = [
-  // Introduction & Objectives
-  { keywords: ['objective', 'goal', 'aim', 'by the end', 'will be able'], category: 'Learning Objectives', priority: 10 },
-  { keywords: ['welcome', 'introduction', 'warm up', 'ice breaker', 'getting started'], category: 'Introduction', priority: 10 },
+  // Learning Structure
+  { keywords: ['objective', 'goal', 'aim', 'by the end', 'will be able', 'learning outcomes'], category: 'Learning Objectives', priority: 10 },
+  { keywords: ['welcome', 'introduction', 'warm up', 'ice breaker', 'getting started', 'let\'s begin'], category: 'Introduction', priority: 10 },
   
-  // Vocabulary & Language Focus
-  { keywords: ['vocabulary', 'new words', 'key terms', 'lexis', 'word study'], category: 'Vocabulary Development', priority: 9 },
-  { keywords: ['grammar', 'structure', 'language point', 'tense', 'syntax'], category: 'Grammar Focus', priority: 9 },
-  { keywords: ['pronunciation', 'phonetics', 'sounds', 'intonation', 'stress'], category: 'Pronunciation Practice', priority: 9 },
+  // Language Skills
+  { keywords: ['vocabulary', 'new words', 'key terms', 'lexis', 'word study', 'meaning'], category: 'Vocabulary Development', priority: 9 },
+  { keywords: ['grammar', 'structure', 'language point', 'tense', 'syntax', 'form'], category: 'Grammar Focus', priority: 9 },
+  { keywords: ['pronunciation', 'phonetics', 'sounds', 'intonation', 'stress', 'accent'], category: 'Pronunciation Practice', priority: 9 },
   
   // Interactive Activities
-  { keywords: ['matching', 'match', 'pair up', 'connect'], category: 'Matching Activities', priority: 8 },
-  { keywords: ['fill in', 'complete', 'gap fill', 'blank', 'missing'], category: 'Gap Fill Activities', priority: 8 },
-  { keywords: ['role play', 'roleplay', 'act out', 'scenario', 'dialogue'], category: 'Role Play', priority: 8 },
-  { keywords: ['discussion', 'talk about', 'share', 'debate', 'opinion'], category: 'Discussion Activities', priority: 8 },
-  { keywords: ['listening', 'audio', 'hear', 'sound'], category: 'Listening Activities', priority: 8 },
-  { keywords: ['reading', 'text', 'passage', 'article'], category: 'Reading Activities', priority: 8 },
-  { keywords: ['writing', 'write', 'compose', 'essay'], category: 'Writing Activities', priority: 8 },
-  { keywords: ['speaking', 'present', 'tell', 'explain'], category: 'Speaking Activities', priority: 8 },
+  { keywords: ['matching', 'match', 'pair up', 'connect', 'link'], category: 'Matching Activities', priority: 8 },
+  { keywords: ['fill in', 'complete', 'gap fill', 'blank', 'missing', 'choose'], category: 'Gap Fill Activities', priority: 8 },
+  { keywords: ['role play', 'roleplay', 'act out', 'scenario', 'dialogue', 'conversation'], category: 'Role Play', priority: 8 },
+  { keywords: ['discussion', 'talk about', 'share', 'debate', 'opinion', 'think'], category: 'Discussion Activities', priority: 8 },
   
-  // Practice & Exercises
-  { keywords: ['practice', 'exercise', 'drill', 'try this', 'activity'], category: 'Practice Activities', priority: 7 },
-  { keywords: ['game', 'quiz', 'competition', 'challenge'], category: 'Interactive Games', priority: 7 },
-  { keywords: ['group work', 'teamwork', 'collaborate', 'together'], category: 'Collaborative Learning', priority: 7 },
+  // Skills Practice
+  { keywords: ['listening', 'audio', 'hear', 'sound', 'listen to'], category: 'Listening Activities', priority: 8 },
+  { keywords: ['reading', 'text', 'passage', 'article', 'read'], category: 'Reading Activities', priority: 8 },
+  { keywords: ['writing', 'write', 'compose', 'essay', 'paragraph'], category: 'Writing Activities', priority: 8 },
+  { keywords: ['speaking', 'present', 'tell', 'explain', 'describe'], category: 'Speaking Activities', priority: 8 },
+  
+  // Practice & Games
+  { keywords: ['practice', 'exercise', 'drill', 'try this', 'activity', 'task'], category: 'Practice Activities', priority: 7 },
+  { keywords: ['game', 'quiz', 'competition', 'challenge', 'play'], category: 'Interactive Games', priority: 7 },
+  { keywords: ['group work', 'teamwork', 'collaborate', 'together', 'pairs'], category: 'Collaborative Learning', priority: 7 },
   
   // Assessment & Review
-  { keywords: ['test', 'quiz', 'assessment', 'check', 'evaluate'], category: 'Assessment', priority: 8 },
+  { keywords: ['test', 'exam', 'assessment', 'check', 'evaluate'], category: 'Assessment', priority: 8 },
   { keywords: ['review', 'summary', 'recap', 'what we learned', 'consolidation'], category: 'Review & Summary', priority: 8 },
-  { keywords: ['feedback', 'correction', 'error', 'mistake'], category: 'Feedback & Correction', priority: 7 },
+  { keywords: ['feedback', 'correction', 'error', 'mistake', 'check your work'], category: 'Feedback & Correction', priority: 7 },
   
-  // Content Presentation
-  { keywords: ['presentation', 'explanation', 'demonstration', 'show'], category: 'Content Presentation', priority: 6 },
-  { keywords: ['example', 'sample', 'model', 'illustration'], category: 'Examples & Models', priority: 6 },
-  
-  // Homework & Conclusion
+  // Content Delivery
+  { keywords: ['presentation', 'explanation', 'demonstration', 'show', 'example'], category: 'Content Presentation', priority: 6 },
   { keywords: ['homework', 'assignment', 'next time', 'for next class', 'take home'], category: 'Homework Assignment', priority: 9 },
-  { keywords: ['conclusion', 'summary', 'wrap up', 'ending', 'goodbye'], category: 'Lesson Conclusion', priority: 8 },
+  { keywords: ['conclusion', 'summary', 'wrap up', 'ending', 'goodbye', 'thank you'], category: 'Lesson Conclusion', priority: 8 },
 ];
 
-// Common slide title patterns that should be categorized
-const TITLE_PATTERNS: { [key: string]: string } = {
+// Direct title to category mapping for common slide titles
+const TITLE_CATEGORY_MAP: { [key: string]: string } = {
   'warm up': 'Introduction',
   'ice breaker': 'Introduction',
   'getting to know': 'Introduction',
-  'let\'s start': 'Introduction',
   'objectives': 'Learning Objectives',
+  'learning objectives': 'Learning Objectives',
   'goals': 'Learning Objectives',
-  'what you will learn': 'Learning Objectives',
   'new vocabulary': 'Vocabulary Development',
+  'vocabulary': 'Vocabulary Development',
   'word bank': 'Vocabulary Development',
-  'key words': 'Vocabulary Development',
   'grammar focus': 'Grammar Focus',
-  'language point': 'Grammar Focus',
-  'structure': 'Grammar Focus',
-  'listen and': 'Listening Activities',
-  'listening task': 'Listening Activities',
-  'read and': 'Reading Activities',
-  'reading comprehension': 'Reading Activities',
-  'speaking practice': 'Speaking Activities',
-  'talk about': 'Speaking Activities',
-  'writing task': 'Writing Activities',
-  'write about': 'Writing Activities',
+  'grammar': 'Grammar Focus',
+  'listening': 'Listening Activities',
+  'reading': 'Reading Activities',
+  'speaking': 'Speaking Activities',
+  'writing': 'Writing Activities',
   'discussion': 'Discussion Activities',
-  'group discussion': 'Discussion Activities',
-  'pair work': 'Collaborative Learning',
   'group work': 'Collaborative Learning',
-  'activity': 'Practice Activities',
-  'exercise': 'Practice Activities',
+  'pair work': 'Collaborative Learning',
   'practice': 'Practice Activities',
+  'exercise': 'Practice Activities',
+  'activity': 'Practice Activities',
   'game': 'Interactive Games',
   'quiz': 'Interactive Games',
   'review': 'Review & Summary',
-  'summary': 'Review & Summary',
   'homework': 'Homework Assignment',
-  'assignment': 'Homework Assignment',
-  'conclusion': 'Lesson Conclusion',
-  'wrap up': 'Lesson Conclusion'
+  'conclusion': 'Lesson Conclusion'
 };
 
-export const categorizeActivityType = (slideTitle: string, allText: string): string => {
-  console.log(`Categorizing activity type for title: "${slideTitle}"`);
+export const categorizeActivityFromRawSlide = (slideData: RawSlideContent): string => {
+  console.log(`=== CATEGORIZING SLIDE ${slideData.slideNumber} ===`);
+  console.log(`Title: "${slideData.title}"`);
+  console.log(`Text elements: ${slideData.textElements.length}`);
+  console.log(`Layout hints: [${slideData.layoutHints.join(', ')}]`);
   
-  // Clean and normalize the title
-  const cleanTitle = slideTitle.trim().toLowerCase();
+  const cleanTitle = slideData.title.trim().toLowerCase();
   
-  if (!cleanTitle) {
-    console.log('No title found, analyzing content...');
-    return categorizeFromContent(allText);
-  }
-  
-  // First, check for direct title pattern matches
-  for (const [pattern, category] of Object.entries(TITLE_PATTERNS)) {
-    if (cleanTitle.includes(pattern)) {
-      console.log(`Found direct title pattern match: "${pattern}" → ${category}`);
+  // Strategy 1: Direct title mapping
+  for (const [titlePattern, category] of Object.entries(TITLE_CATEGORY_MAP)) {
+    if (cleanTitle.includes(titlePattern)) {
+      console.log(`✓ Direct title match: "${titlePattern}" → ${category}`);
       return category;
     }
   }
   
-  // Then check for keyword patterns in the title
-  let bestMatch = { category: '', priority: 0, matchCount: 0 };
-  
-  for (const pattern of ACTIVITY_PATTERNS) {
-    const matchCount = pattern.keywords.filter(keyword => 
-      cleanTitle.includes(keyword.toLowerCase())
-    ).length;
-    
-    if (matchCount > 0) {
-      const score = matchCount * pattern.priority;
-      if (score > bestMatch.priority * bestMatch.matchCount) {
-        bestMatch = { category: pattern.category, priority: pattern.priority, matchCount };
-      }
+  // Strategy 2: Pattern matching in title
+  if (cleanTitle) {
+    const titleMatch = findBestPatternMatch(cleanTitle);
+    if (titleMatch.category !== 'Content Slide') {
+      console.log(`✓ Title pattern match: ${titleMatch.category} (score: ${titleMatch.score})`);
+      return titleMatch.category;
     }
   }
   
-  if (bestMatch.category) {
-    console.log(`Found keyword pattern match in title: ${bestMatch.category} (score: ${bestMatch.priority * bestMatch.matchCount})`);
-    return bestMatch.category;
+  // Strategy 3: Content analysis
+  const contentMatch = findBestPatternMatch(slideData.allText);
+  if (contentMatch.category !== 'Content Slide') {
+    console.log(`✓ Content pattern match: ${contentMatch.category} (score: ${contentMatch.score})`);
+    return contentMatch.category;
   }
   
-  // If no title patterns match, analyze the content
-  console.log('No title patterns matched, analyzing slide content...');
-  return categorizeFromContent(allText, cleanTitle);
+  // Strategy 4: Layout-based inference
+  const layoutCategory = inferFromLayout(slideData);
+  if (layoutCategory !== 'Content Slide') {
+    console.log(`✓ Layout inference: ${layoutCategory}`);
+    return layoutCategory;
+  }
+  
+  // Strategy 5: Position-based inference (intro/conclusion)
+  const positionCategory = inferFromPosition(slideData);
+  if (positionCategory !== 'Content Slide') {
+    console.log(`✓ Position inference: ${positionCategory}`);
+    return positionCategory;
+  }
+  
+  // Fallback: Use title as category if meaningful
+  if (slideData.title && slideData.title.length > 2 && slideData.title.length < 50) {
+    const titleCategory = slideData.title.charAt(0).toUpperCase() + slideData.title.slice(1);
+    console.log(`→ Using title as category: "${titleCategory}"`);
+    return titleCategory;
+  }
+  
+  console.log(`→ Defaulting to: Content Slide`);
+  return 'Content Slide';
 };
 
-const categorizeFromContent = (allText: string, slideTitle?: string): string => {
-  const lowerText = allText.toLowerCase();
-  
-  // Analyze content for activity patterns
-  let bestMatch = { category: 'Content Slide', priority: 0, matchCount: 0 };
+const findBestPatternMatch = (text: string): { category: string; score: number } => {
+  const lowerText = text.toLowerCase();
+  let bestMatch = { category: 'Content Slide', score: 0 };
   
   for (const pattern of ACTIVITY_PATTERNS) {
     const matchCount = pattern.keywords.filter(keyword => 
@@ -144,34 +163,73 @@ const categorizeFromContent = (allText: string, slideTitle?: string): string => 
     
     if (matchCount > 0) {
       const score = matchCount * pattern.priority;
-      if (score > bestMatch.priority * bestMatch.matchCount) {
-        bestMatch = { category: pattern.category, priority: pattern.priority, matchCount };
+      if (score > bestMatch.score) {
+        bestMatch = { category: pattern.category, score };
       }
     }
   }
   
-  if (bestMatch.category !== 'Content Slide') {
-    console.log(`Found content pattern match: ${bestMatch.category} (score: ${bestMatch.priority * bestMatch.matchCount})`);
-    return bestMatch.category;
+  return bestMatch;
+};
+
+const inferFromLayout = (slideData: RawSlideContent): string => {
+  const { layoutHints, textElements, hasImages } = slideData;
+  
+  // Interactive content indicators
+  if (layoutHints.includes('bullets') && textElements.length > 3) {
+    return 'Practice Activities';
   }
   
-  // Final fallback: if we have a meaningful title but no patterns matched
-  if (slideTitle && slideTitle.length > 0) {
-    console.log(`Using slide title as activity type: "${slideTitle}"`);
-    // Capitalize first letter for consistency
-    return slideTitle.charAt(0).toUpperCase() + slideTitle.slice(1);
+  if (layoutHints.includes('table')) {
+    return 'Matching Activities';
   }
   
-  console.log('Defaulting to Content Slide');
+  if (hasImages && textElements.length < 3) {
+    return 'Content Presentation';
+  }
+  
+  if (layoutHints.includes('text-heavy')) {
+    return 'Reading Activities';
+  }
+  
   return 'Content Slide';
 };
 
-// Legacy function for backward compatibility
+const inferFromPosition = (slideData: RawSlideContent): string => {
+  const slideNumber = slideData.slideNumber;
+  
+  // First slide is often introduction
+  if (slideNumber === 1) {
+    return 'Introduction';
+  }
+  
+  // Could add logic for last slide being conclusion
+  // if (slideNumber === totalSlides) return 'Lesson Conclusion';
+  
+  return 'Content Slide';
+};
+
+// Legacy compatibility functions
+export const categorizeActivityType = (slideTitle: string, allText: string): string => {
+  // Create a minimal RawSlideContent for compatibility
+  const mockSlideData: RawSlideContent = {
+    slideNumber: 1,
+    xmlContent: '',
+    textElements: [{ text: slideTitle, hierarchy: 1, isTitle: true }],
+    title: slideTitle,
+    allText,
+    hasImages: false,
+    hasShapes: false,
+    layoutHints: []
+  };
+  
+  return categorizeActivityFromRawSlide(mockSlideData);
+};
+
 export const extractActivityTypeFromTitle = (slideTitle: string): string => {
   return categorizeActivityType(slideTitle, '');
 };
 
-// Legacy function for backward compatibility  
 export const extractActivityTypesFromSlide = (slideTitle: string, allText: string): string[] => {
   const activityType = categorizeActivityType(slideTitle, allText);
   return [activityType];
